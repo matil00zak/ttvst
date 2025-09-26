@@ -1,0 +1,51 @@
+# --- Visual Studio / MSVC ---
+.vs/
+*.vcxproj.user
+*.VC.db
+*.sdf
+*.suo
+*.log
+*.tlog
+*.ipch/
+*.pch
+*.obj
+*.pdb
+*.ilk
+*.idb
+
+# Build outputs
+Debug/
+Release/
+x64/
+x86/
+ARM*/
+out/
+bin/
+build/
+Builds/
+
+# --- JUCE / Projucer / CMake ---
+CMakeFiles/
+CMakeCache.txt
+cmake-build*/
+*.cmake
+Makefile
+DerivedDataCache/
+JUCE.modules
+# If you use Projucer, commit the .jucer file but ignore autosaves:
+*.autosave
+
+# Binaries / plugins
+*.vst3/
+*.dll
+*.lib
+*.exp
+*.exe
+
+# IDEs
+.idea/
+.gradle/
+
+# OS junk
+.DS_Store
+Thumbs.db

@@ -218,25 +218,14 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 
 void PluginTestowy2AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    /*
-    juce::ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-
-        // ..do something to the data...
-    }
-    */
-    
+  
     juce::ScopedNoDenormals _;
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
+
+    // Capture MIDI for the UI (lock-free)
+    for (const auto metadata : midiMessages)
+        midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition);
 
     // Safety: clear outputs that don't have inputs (keep boilerplate)
     for (int ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
@@ -256,8 +245,6 @@ void PluginTestowy2AudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
 
     if (srcN <= 0) return;
 
-    // If file SR != host SR, the simple "1 sample per frame" will drift in time.
-    // For now we assume same SR; we’ll add resampling later.
     for (int n = 0; n < outN; ++n)
     {
         // End behavior: loop or clamp

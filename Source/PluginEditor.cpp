@@ -40,6 +40,19 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
                 });
         };
 
+
+    // MIDI monitor setup
+    midiMonitor.setMultiLine(true);
+    midiMonitor.setReadOnly(true);
+    midiMonitor.setScrollbarsShown(true);
+    midiMonitor.setCaretVisible(false);
+    midiMonitor.setFont(juce::FontOptions(13.0f));
+    addAndMakeVisible(midiMonitor);
+    
+    startTimerHz(30); // poll MIDI log ~30 FPS
+
+
+
     setSize (400, 300);
 }
 
@@ -57,11 +70,38 @@ void PluginTestowy2AudioProcessorEditor::paint (juce::Graphics& g)
     g.setColour (juce::Colours::white);
     g.setFont (juce::FontOptions (15.0f));
     g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
-    loadButton.setBounds(getLocalBounds().reduced(20));
+    //loadButton.setBounds(getLocalBounds().reduced(20));
 }
 
 void PluginTestowy2AudioProcessorEditor::resized()
 {
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
+    loadButton.setBounds(getLocalBounds().reduced(20));
+    auto area = getLocalBounds().reduced(8);
+    auto top = area.removeFromTop(36);
+    loadButton.setBounds(top.removeFromLeft(140));
+    area.removeFromTop(8);
+    midiMonitor.setBounds(area);
+
 }
+
+ void PluginTestowy2AudioProcessorEditor::timerCallback()
+ {
+    std::vector<ttvst::MidiEvent> events;
+    audioProcessor.getMidiLog().drainTo(events);
+    
+    if (events.empty()) return;
+    
+    // Append new lines to our fixed-size buffer
+    for (const auto& e : events)
+        midiLines.add(e.toString());
+    
+    // Trim to last kMaxLines
+    if (midiLines.size() > kMaxLines)
+        midiLines.removeRange(0, midiLines.size() - kMaxLines);
+    
+    // Re-render (small list, so full rewrite is fine)
+    midiMonitor.setText(midiLines.joinIntoString("\n"), false);
+    midiMonitor.moveCaretToEnd();
+ }

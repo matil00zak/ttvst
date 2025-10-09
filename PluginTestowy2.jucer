@@ -4,6 +4,13 @@
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1">
   <MAINGROUP id="lgQ1Au" name="PluginTestowy2">
     <GROUP id="{99ED1F21-A7C9-0CD2-C1AA-5FDA53FCEF49}" name="Source">
+      <GROUP id="{6404C124-BA94-A780-3DD7-C286B1BDC9F8}" name="control">
+        <FILE id="fiFq5u" name="MidiMessageManager.h" compile="0" resource="0"
+              file="Source/MidiMessageManager.h"/>
+      </GROUP>
+      <GROUP id="{32835401-8D37-AF1C-7EAE-008BDBD15BED}" name="audio">
+        <FILE id="Tez4Nj" name="LoadedAudio.h" compile="0" resource="0" file="Source/LoadedAudio.h"/>
+      </GROUP>
       <FILE id="sYjKhp" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>
       <FILE id="Va0CtN" name="PluginProcessor.h" compile="0" resource="0"

@@ -12,15 +12,13 @@
 #include <memory>
 #include <atomic>
 #include <vector>
+#include "LoadedAudio.h"
+#include "MidiMessageManager.h"
 //==============================================================================
 /**
 */
 
-struct LoadedAudio
-{
-    int sampleRate = 0;
-    juce::AudioBuffer<float> buffer; // dane w RAM (planarnie)
-};
+
 
 class PluginTestowy2AudioProcessor  : public juce::AudioProcessor
 {
@@ -29,6 +27,8 @@ public:
     PluginTestowy2AudioProcessor();
     ~PluginTestowy2AudioProcessor() override;
 
+
+    ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
 
     std::shared_ptr<const LoadedAudio> getLoaded() const noexcept;
     void beginLoadFile(const juce::File& file);
@@ -72,6 +72,7 @@ private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginTestowy2AudioProcessor)
     std::shared_ptr<const LoadedAudio> loaded_;
+    ttvst::MidiMessageManager midiLog_;
 
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay
     int64_t playhead_ = 0;             // current read position in source samples

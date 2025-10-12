@@ -19,8 +19,7 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
  // Set the callback for when the button is clicked
 
     addAndMakeVisible(loadButton);
-    loadButton.onClick = [this]()
-        {
+    loadButton.onClick = [this](){
             DBG("CLICKED");
             fileChooser = std::make_unique<juce::FileChooser>(
                 "Select an audio file...", juce::File{},
@@ -40,6 +39,10 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
                 });
         };
 
+    addAndMakeVisible(clearLogButton);
+    clearLogButton.onClick = [this]() {
+        midiMonitor.clear();
+        };
 
     // MIDI monitor setup
     midiMonitor.setMultiLine(true);
@@ -78,9 +81,11 @@ void PluginTestowy2AudioProcessorEditor::resized()
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
     loadButton.setBounds(getLocalBounds().reduced(20));
+    clearLogButton.setBounds(getLocalBounds().reduced(20));
     auto area = getLocalBounds().reduced(8);
     auto top = area.removeFromTop(36);
     loadButton.setBounds(top.removeFromLeft(140));
+    clearLogButton.setBounds(top.removeFromLeft(280));
     area.removeFromTop(8);
     midiMonitor.setBounds(area);
 

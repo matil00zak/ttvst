@@ -153,6 +153,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     // initialisation that you need..
     hostSampleRate_ = sampleRate;
     playhead_ = 0; // reset on (re)start
+    
 }
 
 void PluginTestowy2AudioProcessor::releaseResources()
@@ -216,9 +217,10 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
         }).detach();
 }
 
-void PluginTestowy2AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
-{
-  
+void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{   
+    std::optional<int> firstOffset, lastOffset;
+    std::optional<int> firstValue, lastValue;
     juce::ScopedNoDenormals _;
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
@@ -245,6 +247,27 @@ void PluginTestowy2AudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
 
     if (srcN <= 0) return;
 
+    //get first and last relevant pitchbend data that represents plate movement
+    int countPB = 0;
+    for (const auto metadata : midiMessages) {
+        const auto& m = metadata.getMessage();
+        const int offset = metadata.samplePosition;
+
+        if (m.isPitchWheel()) {
+            const int value14 = m.getPitchWheelValue();
+            ++countPB;
+            if (!firstOffset) { firstOffset = offset; firstValue = value14; }
+            lastOffset = offset; lastValue = value14;
+        }
+    }
+    DBG("PB count:" << countPB);
+    if (firstValue && lastValue) {
+        float playheadMovement = (*lastValue - *firstValue)/0.75*hostSampleRate_/16000;
+        DBG("movement" << playheadMovement);
+    }
+}
+    //simple playback
+    /*
     for (int n = 0; n < outN; ++n)
     {
         // End behavior: loop or clamp
@@ -274,14 +297,8 @@ void PluginTestowy2AudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
 
         ++playhead_; // advance 1 sample (1× speed)
     }
-    
-
-
-
-
-
 }
-
+*/
 //==============================================================================
 bool PluginTestowy2AudioProcessor::hasEditor() const
 {

@@ -16,7 +16,7 @@
 //==============================================================================
 
 
-
+struct Seg { int start = 0; int end = 0; int guwno; };
 static std::shared_ptr<LoadedAudio>
 
 loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
@@ -146,13 +146,16 @@ void PluginTestowy2AudioProcessor::changeProgramName (int index, const juce::Str
 {
 }
 
+
 //==============================================================================
 void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
     hostSampleRate_ = sampleRate;
-    playhead_ = 0; // reset on (re)start
+    float playhead_ = 0.0; // reset on (re)start
+    setLatencySamples(samplesPerBlock);
+
     
 }
 
@@ -219,52 +222,127 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 
 void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {   
-    std::optional<int> firstOffset, lastOffset;
-    std::optional<int> firstValue, lastValue;
+    std::optional<int> preRenderOffset, lastOffset, afterRenderOffset;
+    std::optional<int> preRenderValue, lastValue, afterRenderValue;
+    std::optional<Seg> afterRenderSeg;
     juce::ScopedNoDenormals _;
+    juce::MidiBuffer midiThisBlock = midiMessages;
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
-
-    // Capture MIDI for the UI (lock-free)
+    
+    // Capture MIDI for the UI
+    
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition);
 
-    // Safety: clear outputs that don't have inputs (keep boilerplate)
     for (int ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
         buffer.clear(ch, 0, buffer.getNumSamples());
 
-    // We’re a player: start with a clean buffer
-    buffer.clear();
 
     // Snapshot the loaded data (atomic load in your getLoaded())
     auto data = getLoaded();
-    if (!data) return; // nothing loaded yet
-
+    if (!data) return;
     const int srcCh = data->buffer.getNumChannels();
     const int srcN = data->buffer.getNumSamples();
+
     const int outCh = buffer.getNumChannels();
     const int outN = buffer.getNumSamples();
 
     if (srcN <= 0) return;
 
-    //get first and last relevant pitchbend data that represents plate movement
-    int countPB = 0;
+    //if host rezized buffer then haveLast = false
+    if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN){
+        lastBlock_.setSize(outCh, outN, false, true, true);
+        render_.setSize(outCh, outN, false, true, true);
+        haveLast_ = false; 
+        haveLastMidi_ = false;
+    }
+
+    render_.clear();
+    //modify the render
+    //struct Seg { int start = 0; int end = 0; int guwno; };
+    juce::Array<Seg, juce::CriticalSection, 16> segs;    
+
     for (const auto metadata : midiMessages) {
         const auto& m = metadata.getMessage();
-        const int offset = metadata.samplePosition;
-
         if (m.isPitchWheel()) {
-            const int value14 = m.getPitchWheelValue();
-            ++countPB;
-            if (!firstOffset) { firstOffset = offset; firstValue = value14; }
-            lastOffset = offset; lastValue = value14;
+            afterRenderOffset = metadata.samplePosition;
+            afterRenderValue = m.getPitchWheelValue();
+            Seg afterRenderSeg = { *afterRenderOffset, outN, *afterRenderValue };
+            break;
         }
     }
-    DBG("PB count:" << countPB);
-    if (firstValue && lastValue) {
-        float playheadMovement = (*lastValue - *firstValue)/0.75*hostSampleRate_/16000;
-        DBG("movement" << playheadMovement);
+
+
+    if (haveLastMidi_) {
+        int countPB = 0;
+        for (const auto metadata : lastMidi_) {
+            const auto& m = metadata.getMessage();
+            if (!m.isPitchWheel()) continue;
+            const int offset = metadata.samplePosition;
+            int val = m.getPitchWheelValue();
+            if (segs.isEmpty()) {
+                segs.add({ 0, offset, val });
+                
+            }
+            else {
+                //float playheadMovement = (val-*lastValue) / 0.75 * hostSampleRate_ / 16000;
+                segs.add({*lastOffset , offset, val });
+                lastOffset = offset;
+                lastValue = val;
+            }
+            ++countPB;
+            lastOffset = offset;
+            lastValue = val;//later save value into prerender
+        }
+        DBG("PB count:" << countPB);
     }
+
+    if (preRenderOffset) {
+        segs.insert(0, { *preRenderOffset, outN, *preRenderValue });
+        DBG("seg inserted");
+    }
+    /*if (afterRenderOffset.has_value()) {
+        segs.add(*afterRenderSeg);
+
+    }*/
+
+    preRenderOffset = lastOffset;
+    preRenderValue = lastValue;
+    
+
+    for (const auto seg : segs) {
+        DBG("start:" << seg.start << "stop:" << seg.end << "value:" << seg.guwno);
+    }
+    
+    buffer.clear();
+
+    if (haveLast_){
+        for (int ch = 0; ch < outCh; ++ch)
+            buffer.copyFrom(ch, 0, lastBlock_, ch, 0, outN);
+        
+    }
+
+    for (int ch = 0; ch < outCh; ++ch)
+        lastBlock_.copyFrom(ch, 0, render_, ch, 0, outN);
+    
+
+    if (haveLastMidi_) {
+        midiMessages.swapWith(lastMidi_);
+        for (const auto metadata : lastMidi_) {
+            const auto m = metadata.getMessage();
+            if (m.isPitchWheel()) {
+                preRenderOffset = metadata.samplePosition;
+                preRenderValue = m.getPitchWheelValue();
+                continue;
+            }
+        }
+    }
+    lastMidi_.swapWith(midiThisBlock);
+
+
+    haveLastMidi_ = true;
+    haveLast_ = true;
 }
     //simple playback
     /*

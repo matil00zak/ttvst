@@ -42,6 +42,7 @@ public:
    #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -77,4 +78,8 @@ private:
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay
     int64_t playhead_ = 0;             // current read position in source samples
     bool loop_ = true;
+    juce::AudioBuffer<float> lastBlock_, render_;
+    juce::MidiBuffer lastMidi_;
+    bool haveLastMidi_ = false;
+    bool haveLast_ = false;
 };

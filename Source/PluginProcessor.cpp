@@ -294,22 +294,31 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         DBG("PB count:" << countPB);
     }
     
-    if (havePreRender) {
-        segs.insert(0, { preRenderOffset, outN, preRenderValue });
-        DBG("seg inserted");
+    if (preRenderOffset && preRenderValue) {
+        segs.insert(0, { *preRenderOffset, outN, *preRenderValue });
+        DBG("preSeg inserted");
+        
     }
 
 
     if (afterRenderOffset) {
         segs.add({ 0, *afterRenderOffset, *afterRenderValue });
+        DBG("afterSeg inserted");
+        afterRenderOffset.reset();
+        afterRenderValue.reset();
     }
     
     if (lastOffset && lastValue) {
         preRenderOffset = *lastOffset;
         preRenderValue = *lastValue;
-        havePreRender = true;
     }
-    
+    else {
+        preRenderOffset.reset();
+        preRenderValue.reset();
+    }
+
+    lastOffset.reset();
+    lastValue.reset();
 
     for (const auto seg : segs) {
         DBG("start:" << seg.start << "stop:" << seg.end << "value:" << seg.guwno);
@@ -346,39 +355,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     haveLastMidi_ = true;
     haveLast_ = true;
 }
-    //simple playback
-    /*
-    for (int n = 0; n < outN; ++n)
-    {
-        // End behavior: loop or clamp
-        if (playhead_ >= srcN)
-        {
-            if (loop_) playhead_ = 0;
-            else break; // leave silence for the rest of the block
-        }
 
-        // Read one sample from source (mix to mono if stereo)
-        float s = 0.0f;
-        if (srcCh == 1)
-        {
-            s = data->buffer.getSample(0, (int)playhead_);
-        }
-        else
-        {
-            // simple L/R average; later you can copy channels 1:1
-            const float l = data->buffer.getSample(0, (int)playhead_);
-            const float r = data->buffer.getSample(1, (int)playhead_);
-            s = 0.5f * (l + r);
-        }
-
-        // Write the sample to all output channels
-        for (int ch = 0; ch < outCh; ++ch)
-            buffer.setSample(ch, n, s);
-
-        ++playhead_; // advance 1 sample (1× speed)
-    }
-}
-*/
 //==============================================================================
 bool PluginTestowy2AudioProcessor::hasEditor() const
 {

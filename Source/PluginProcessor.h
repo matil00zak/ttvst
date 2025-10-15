@@ -74,7 +74,8 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginTestowy2AudioProcessor)
     std::shared_ptr<const LoadedAudio> loaded_;
     ttvst::MidiMessageManager midiLog_;
-
+    std::optional<int> lastOffset, afterRenderOffset;
+    std::optional<int> lastValue, afterRenderValue;
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay
     int64_t playhead_ = 0;             // current read position in source samples
     bool loop_ = true;
@@ -82,4 +83,8 @@ private:
     juce::MidiBuffer lastMidi_;
     bool haveLastMidi_ = false;
     bool haveLast_ = false;
+    int preRenderOffset;
+    int preRenderValue;
+    bool havePreRender = false;
+
 };

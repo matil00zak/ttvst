@@ -155,7 +155,8 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     hostSampleRate_ = sampleRate;
     float playhead_ = 0.0; // reset on (re)start
     setLatencySamples(samplesPerBlock);
-
+    preRenderOffset = 0;
+    preRenderValue = 0;
     
 }
 
@@ -222,9 +223,6 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 
 void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {   
-    std::optional<int> preRenderOffset, lastOffset, afterRenderOffset;
-    std::optional<int> preRenderValue, lastValue, afterRenderValue;
-    std::optional<Seg> afterRenderSeg;
     juce::ScopedNoDenormals _;
     juce::MidiBuffer midiThisBlock = midiMessages;
     const int totalNumInputChannels = getTotalNumInputChannels();
@@ -268,7 +266,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         if (m.isPitchWheel()) {
             afterRenderOffset = metadata.samplePosition;
             afterRenderValue = m.getPitchWheelValue();
-            Seg afterRenderSeg = { *afterRenderOffset, outN, *afterRenderValue };
             break;
         }
     }
@@ -280,35 +277,38 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
             const int offset = metadata.samplePosition;
-            int val = m.getPitchWheelValue();
+            const int val = m.getPitchWheelValue();
             if (segs.isEmpty()) {
                 segs.add({ 0, offset, val });
-                
             }
             else {
                 //float playheadMovement = (val-*lastValue) / 0.75 * hostSampleRate_ / 16000;
-                segs.add({*lastOffset , offset, val });
-                lastOffset = offset;
-                lastValue = val;
+                if (lastOffset) {
+                    segs.add({ *lastOffset , offset, val });
+                }
             }
             ++countPB;
             lastOffset = offset;
-            lastValue = val;//later save value into prerender
+            lastValue = val;
         }
         DBG("PB count:" << countPB);
     }
-
-    if (preRenderOffset) {
-        segs.insert(0, { *preRenderOffset, outN, *preRenderValue });
+    
+    if (havePreRender) {
+        segs.insert(0, { preRenderOffset, outN, preRenderValue });
         DBG("seg inserted");
     }
-    /*if (afterRenderOffset.has_value()) {
-        segs.add(*afterRenderSeg);
 
-    }*/
 
-    preRenderOffset = lastOffset;
-    preRenderValue = lastValue;
+    if (afterRenderOffset) {
+        segs.add({ 0, *afterRenderOffset, *afterRenderValue });
+    }
+    
+    if (lastOffset && lastValue) {
+        preRenderOffset = *lastOffset;
+        preRenderValue = *lastValue;
+        havePreRender = true;
+    }
     
 
     for (const auto seg : segs) {
@@ -329,14 +329,16 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     if (haveLastMidi_) {
         midiMessages.swapWith(lastMidi_);
+        /*
         for (const auto metadata : lastMidi_) {
             const auto m = metadata.getMessage();
             if (m.isPitchWheel()) {
                 preRenderOffset = metadata.samplePosition;
                 preRenderValue = m.getPitchWheelValue();
-                continue;
+                
             }
         }
+        */
     }
     lastMidi_.swapWith(midiThisBlock);
 

@@ -76,6 +76,7 @@ private:
     ttvst::MidiMessageManager midiLog_;
     std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
     std::optional<int> lastValue, afterRenderValue, preRenderValue;
+    enum block { pre, render, after };
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay
     int64_t playhead_ = 0;             // current read position in source samples
     bool loop_ = true;

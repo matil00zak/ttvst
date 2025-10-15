@@ -15,8 +15,7 @@
 #include <wtypes.h>
 //==============================================================================
 
-
-struct Seg { int start = 0; int end = 0; int guwno; };
+struct Seg { int start = 0; int end = 0; int guwno; int t; };
 static std::shared_ptr<LoadedAudio>
 
 loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
@@ -279,12 +278,12 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             const int offset = metadata.samplePosition;
             const int val = m.getPitchWheelValue();
             if (segs.isEmpty()) {
-                segs.add({ 0, offset, val });
+                segs.add({ 0, offset, val, 1});
             }
             else {
                 //float playheadMovement = (val-*lastValue) / 0.75 * hostSampleRate_ / 16000;
                 if (lastOffset) {
-                    segs.add({ *lastOffset , offset, val });
+                    segs.add({ *lastOffset , offset, val, 1});
                 }
             }
             ++countPB;
@@ -292,21 +291,33 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             lastValue = val;
         }
         DBG("PB count:" << countPB);
+
+
+
     }
-    
+
     if (preRenderOffset && preRenderValue) {
-        segs.insert(0, { *preRenderOffset, outN, *preRenderValue });
+        segs.insert(0, { *preRenderOffset, outN, *preRenderValue, 0 });
         DBG("preSeg inserted");
         
     }
 
-
     if (afterRenderOffset) {
-        segs.add({ 0, *afterRenderOffset, *afterRenderValue });
+        segs.add({ 0, *afterRenderOffset, *afterRenderValue, 2 });
         DBG("afterSeg inserted");
         afterRenderOffset.reset();
         afterRenderValue.reset();
     }
+
+    //RENDERING
+    if (haveLastMidi_ && !segs.isEmpty()) {
+        for (const auto seg : segs) {
+            if (seg.t == 0) {
+
+            }
+        }
+    }
+
     
     if (lastOffset && lastValue) {
         preRenderOffset = *lastOffset;
@@ -321,7 +332,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     lastValue.reset();
 
     for (const auto seg : segs) {
-        DBG("start:" << seg.start << "stop:" << seg.end << "value:" << seg.guwno);
+        DBG("start:" << seg.start << "stop:" << seg.end << "value:" << seg.guwno << "type" << seg.t);
     }
     
     buffer.clear();

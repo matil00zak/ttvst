@@ -31,8 +31,9 @@ public:
     ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
 
     std::shared_ptr<const LoadedAudio> getLoaded() const noexcept;
+    std::shared_ptr<const LoadedAudio> getLoadedReversed() const noexcept;
     void beginLoadFile(const juce::File& file);
-
+    int getDeltaPh(int endVal, int startVal, int hostSr);
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -72,18 +73,19 @@ public:
 private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginTestowy2AudioProcessor)
-    std::shared_ptr<const LoadedAudio> loaded_;
+    std::shared_ptr<const LoadedAudio> loaded_, loadedReversed_;
     ttvst::MidiMessageManager midiLog_;
     std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
     std::optional<int> lastValue, afterRenderValue, preRenderValue;
     enum block { pre, render, after };
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay
-    int64_t playhead_ = 0;             // current read position in source samples
+    int64_t playhead_ = 0;
+    int64_t playheadReversed_ = 0;// current read position in source samples
     bool loop_ = true;
     juce::AudioBuffer<float> lastBlock_, render_;
     juce::MidiBuffer lastMidi_;
     bool haveLastMidi_ = false;
     bool haveLast_ = false;
-
+    juce::LagrangeInterpolator interp;
 
 };

@@ -13,11 +13,23 @@
 #include <juce_audio_formats/codecs/flac/format.h>
 #include <pluginterfaces/base/ftypes.h>
 #include <wtypes.h>
+#include <cmath>
 //==============================================================================
+using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
+struct Seg { int offset = 0; int value  = 0; };
 
-struct Seg { int start = 0; int end = 0; int guwno; int t; };
-static std::shared_ptr<LoadedAudio>
 
+
+
+int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
+    const int delta = end - start;                 // can be negative
+    const double ratio = static_cast<double>(delta) / 16383.0;   // 14-bit range
+    const double seconds = 4.0 / 3.0;
+    const double samples = ratio * (static_cast<double>(hostSr) * seconds);
+    return static_cast<int>(std::lround(samples));
+}
+
+static LoadedPair
 loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 {
     std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(file));
@@ -32,6 +44,9 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 
     auto out = std::make_shared<LoadedAudio>();
     out->sampleRate = (int)reader->sampleRate;
+    auto outReversed = std::make_shared<LoadedAudio>();
+    out->sampleRate = (int)reader->sampleRate;
+    outReversed->buffer.setSize(numChannels, numSamples, false, false, true);
     out->buffer.setSize(numChannels, numSamples, false, false, true);
     // setSize(ch, samples, keepContent=false, clearExtraSpace=false, avoidReallocating=true)
 
@@ -55,14 +70,18 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 
         filePos += toRead;
     }
+    outReversed->buffer.makeCopyOf(out->buffer);
+    outReversed->buffer.reverse(0, numSamples);
 
-    return out;
+    return { out, outReversed };
 }
-std::shared_ptr<const LoadedAudio>
-PluginTestowy2AudioProcessor::getLoaded() const noexcept
-{
+LoadedAudioPtr PluginTestowy2AudioProcessor::getLoaded() const noexcept{
     // atomowy odczyt wskaznika (acquire para dla release w loaderze)
     return std::atomic_load_explicit(&loaded_, std::memory_order_acquire);
+}
+LoadedAudioPtr PluginTestowy2AudioProcessor::getLoadedReversed() const noexcept {
+    // atomowy odczyt wskaznika (acquire para dla release w loaderze)
+    return std::atomic_load_explicit(&loadedReversed_, std::memory_order_acquire);
 }
 
 PluginTestowy2AudioProcessor::PluginTestowy2AudioProcessor()
@@ -152,7 +171,8 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
     hostSampleRate_ = sampleRate;
-    float playhead_ = 0.0; // reset on (re)start
+    playhead_ = 0; // reset on (re)start
+    playheadReversed_ = 0;
     setLatencySamples(samplesPerBlock);
     preRenderOffset = 0;
     preRenderValue = 0;
@@ -200,9 +220,9 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
             juce::AudioFormatManager fm;
             fm.registerBasicFormats(); // WAV/AIFF/FLAC/MP3* (MP3 depends on defines)
 
-            auto data = loadFileIntoAudioBuffer(fm, file); // std::shared_ptr<LoadedAudio>
-            if (data)
-            {
+            auto[ data, dataReversed ] = loadFileIntoAudioBuffer(fm, file); // std::shared_ptr<LoadedAudio>
+            if (data && dataReversed)
+            {   
                 DBG("Loaded: " << file.getFileName()
                     << "  SR=" << data->sampleRate
                     << "  ch=" << data->buffer.getNumChannels()
@@ -210,8 +230,16 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 
                 // Publish as const to match the field type `std::shared_ptr<const LoadedAudio>`
                 // NOTE: atomic_store/atomic_load overloads for shared_ptr are declared in <memory>.
-                std::shared_ptr<const LoadedAudio> published = std::move(data);
-                std::atomic_store_explicit(&loaded_, published, std::memory_order_release);
+                if (data->getNumSamples() == dataReversed->getNumSamples()) {
+                    std::shared_ptr<const LoadedAudio> published = std::move(data);
+                    std::atomic_store_explicit(&loaded_, published, std::memory_order_release);
+                    std::shared_ptr<const LoadedAudio> publishedReversed = std::move(dataReversed);
+                    std::atomic_store_explicit(&loadedReversed_, publishedReversed, std::memory_order_release);
+                }
+                else {
+                    DBG("data and its reversed version have unexpected differences");
+                }
+                DBG("LOADEDD");
             }
             else
             {
@@ -238,7 +266,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     // Snapshot the loaded data (atomic load in your getLoaded())
     auto data = getLoaded();
-    if (!data) return;
+    auto dataReversed = getLoadedReversed();
+    if (!data || !dataReversed) return;
     const int srcCh = data->buffer.getNumChannels();
     const int srcN = data->buffer.getNumSamples();
 
@@ -269,21 +298,21 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
     }
 
-
+    int countPB = 0;
     if (haveLastMidi_) {
-        int countPB = 0;
+        
         for (const auto metadata : lastMidi_) {
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
             const int offset = metadata.samplePosition;
             const int val = m.getPitchWheelValue();
             if (segs.isEmpty()) {
-                segs.add({ 0, offset, val, 1});
+                segs.add({ offset, val});
             }
             else {
                 //float playheadMovement = (val-*lastValue) / 0.75 * hostSampleRate_ / 16000;
                 if (lastOffset) {
-                    segs.add({ *lastOffset , offset, val, 1});
+                    segs.add({ offset, val });
                 }
             }
             ++countPB;
@@ -291,32 +320,91 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             lastValue = val;
         }
         DBG("PB count:" << countPB);
-
-
-
     }
 
     if (preRenderOffset && preRenderValue) {
-        segs.insert(0, { *preRenderOffset, outN, *preRenderValue, 0 });
-        DBG("preSeg inserted");
-        
+        Seg preRenderSeg{*preRenderOffset, *preRenderValue};
+        DBG("afterRenderSeg created");
     }
 
     if (afterRenderOffset) {
-        segs.add({ 0, *afterRenderOffset, *afterRenderValue, 2 });
-        DBG("afterSeg inserted");
-        afterRenderOffset.reset();
-        afterRenderValue.reset();
+        Seg afterRenderSeg{*afterRenderOffset, *afterRenderValue,};
+        DBG("preRenderSeg created");
     }
 
     //RENDERING
+    
     if (haveLastMidi_ && !segs.isEmpty()) {
-        for (const auto seg : segs) {
-            if (seg.t == 0) {
+        
+        const float* inBuffer = nullptr;
 
+        //render 0 - midiMessage[0]
+        if (preRenderOffset.has_value() && preRenderValue.has_value()) {
+            int lenOut = segs[0].offset + 1;
+            int lenIn = std::abs(getDeltaPh(segs[0].value, *preRenderValue, hostSampleRate_));
+            if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
+            double ratio = static_cast<double>(lenIn) / lenOut;
+            if (getDeltaPh(segs[0].value, *preRenderValue, hostSampleRate_) < 0) {
+                inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
             }
+            else {
+                inBuffer = data->buffer.getReadPointer(0, playhead_);
+            }
+            float* outBuffer = render_.getWritePointer(0, 0);
+            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn, 0);
+            realDelta *= (realDelta < 0) ? -1 : 1;
+            playhead_ += realDelta;
         }
+        
+        //render midiMessage[0] - midiMessage[last]
+        for (size_t i = 0, n = segs.size(); i + 1 < n; ++i) {
+            const Seg& seg = segs[i];
+            const Seg& next = segs[i + 1];
+            int lenOut = next.value - seg.value;
+            int deltaPh = (getDeltaPh(next.value, seg.value, hostSampleRate_));
+            int lenIn = std::abs(deltaPh);
+            if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
+            double ratio = static_cast<double>(lenIn) / lenOut;
+            if (deltaPh < 0) {
+                inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
+                
+            }
+            else {
+                inBuffer = data->buffer.getReadPointer(0, playhead_);
+            }
+            float* outBuffer = render_.getWritePointer(0, 0);
+            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn, 0);
+            
+            realDelta *= (realDelta < 0) ? -1 : 1;
+            playhead_ += realDelta;
+        }
+
+        if (afterRenderOffset.has_value() && afterRenderValue.has_value()) {
+            const Seg& lastSeg = *segs.end();
+            int lenOut = render_.getNumSamples() - 1 - lastSeg.offset;
+            int deltaPh = (getDeltaPh(*afterRenderValue, lastSeg.value, hostSampleRate_));
+            int lenIn = std::abs(deltaPh);
+            if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
+            double ratio = static_cast<double>(lenIn) / lenOut;
+            if (deltaPh < 0) {
+                inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
+            }
+            else {
+                inBuffer = data->buffer.getReadPointer(0, playhead_);
+            }
+            float* outBuffer = render_.getWritePointer(0, 0);
+            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn, 0);
+
+            realDelta *= (realDelta < 0) ? -1 : 1;
+            playhead_ += realDelta;
+
+        }
+
+
+
     }
+    
+
 
     
     if (lastOffset && lastValue) {
@@ -327,38 +415,30 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         preRenderOffset.reset();
         preRenderValue.reset();
     }
-
+    afterRenderOffset.reset();
+    afterRenderValue.reset();
     lastOffset.reset();
     lastValue.reset();
 
+
     for (const auto seg : segs) {
-        DBG("start:" << seg.start << "stop:" << seg.end << "value:" << seg.guwno << "type" << seg.t);
+        DBG("stop:" << seg.offset << "value:" << seg.value);
     }
     
     buffer.clear();
 
-    if (haveLast_){
+    /*if (haveLast_) {
         for (int ch = 0; ch < outCh; ++ch)
             buffer.copyFrom(ch, 0, lastBlock_, ch, 0, outN);
         
-    }
+    }*/
 
     for (int ch = 0; ch < outCh; ++ch)
-        lastBlock_.copyFrom(ch, 0, render_, ch, 0, outN);
+        buffer.copyFrom(ch, 0, render_, ch, 0, outN);
     
 
     if (haveLastMidi_) {
         midiMessages.swapWith(lastMidi_);
-        /*
-        for (const auto metadata : lastMidi_) {
-            const auto m = metadata.getMessage();
-            if (m.isPitchWheel()) {
-                preRenderOffset = metadata.samplePosition;
-                preRenderValue = m.getPitchWheelValue();
-                
-            }
-        }
-        */
     }
     lastMidi_.swapWith(midiThisBlock);
 

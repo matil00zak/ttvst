@@ -23,9 +23,9 @@ struct Seg { int offset = 0; int value  = 0; };
 
 int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
     const int delta = end - start;                 // can be negative
-    const double ratio = static_cast<double>(delta) / 16383.0;   // 14-bit range
-    const double seconds = 4.0 / 3.0;
-    const double samples = ratio * (static_cast<double>(hostSr) * seconds);
+    const double frac = static_cast<double>(delta) / 16383.0;   // 14-bit range
+    const double seconds = 6.0 / 7.5;
+    const double samples = frac * (static_cast<double>(hostSr) * seconds);
     return static_cast<int>(std::lround(samples));
 }
 
@@ -260,9 +260,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition);
 
-    for (int ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
-        buffer.clear(ch, 0, buffer.getNumSamples());
-
+    //for (int ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
+        //buffer.clear(ch, 0, buffer.getNumSamples());
+    buffer.clear();
 
     // Snapshot the loaded data (atomic load in your getLoaded())
     auto data = getLoaded();
@@ -284,7 +284,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         haveLastMidi_ = false;
     }
 
-    render_.clear();
+    //render_.clear();
     //modify the render
     //struct Seg { int start = 0; int end = 0; int guwno; };
     juce::Array<Seg, juce::CriticalSection, 16> segs;    
@@ -324,46 +324,51 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     if (preRenderOffset && preRenderValue) {
         Seg preRenderSeg{*preRenderOffset, *preRenderValue};
-        DBG("afterRenderSeg created");
+        DBG("preRenderSeg created");
     }
 
     if (afterRenderOffset) {
         Seg afterRenderSeg{*afterRenderOffset, *afterRenderValue,};
-        DBG("preRenderSeg created");
+        DBG("afterRenderSeg created");
     }
 
     //RENDERING
-    
-    if (haveLastMidi_ && !segs.isEmpty()) {
+    bool doit = true;
+    if (haveLastMidi_ && !segs.isEmpty() && doit) {
         
         const float* inBuffer = nullptr;
 
         //render 0 - midiMessage[0]
         if (preRenderOffset.has_value() && preRenderValue.has_value()) {
             int lenOut = segs[0].offset + 1;
-            int lenIn = std::abs(getDeltaPh(segs[0].value, *preRenderValue, hostSampleRate_));
+            int deltaPh = (getDeltaPh(*preRenderValue, segs[0].value, hostSampleRate_));
+            int lenIn = std::abs(deltaPh);
             if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
             double ratio = static_cast<double>(lenIn) / lenOut;
-            if (getDeltaPh(segs[0].value, *preRenderValue, hostSampleRate_) < 0) {
+            if (deltaPh < 0) {
                 inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
             }
             else {
                 inBuffer = data->buffer.getReadPointer(0, playhead_);
             }
-            float* outBuffer = render_.getWritePointer(0, 0);
-            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn, 0);
-            realDelta *= (realDelta < 0) ? -1 : 1;
+            float* outBuffer = buffer.getWritePointer(0, 0);
+
+            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
+            interp.reset();
+
+            realDelta *= (deltaPh < 0) ? -1 : 1;
             playhead_ += realDelta;
+            DBG("real delta1: " << realDelta << "playhead" << playhead_);
         }
         
         //render midiMessage[0] - midiMessage[last]
-        for (size_t i = 0, n = segs.size(); i + 1 < n; ++i) {
-            const Seg& seg = segs[i];
-            const Seg& next = segs[i + 1];
-            int lenOut = next.value - seg.value;
-            int deltaPh = (getDeltaPh(next.value, seg.value, hostSampleRate_));
+        for (int i = 0, n = segs.size(); i + 1 < n; ++i) {
+            Seg seg = segs[i];
+            Seg next = segs[i + 1];
+            int lenOut = next.offset - seg.offset;
+            int deltaPh = (getDeltaPh(seg.value, next.value, hostSampleRate_));
             int lenIn = std::abs(deltaPh);
-            if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
+            if (lenOut <= 0 || lenIn <= 0) continue; // or continue / set ratio=1
             double ratio = static_cast<double>(lenIn) / lenOut;
             if (deltaPh < 0) {
                 inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
@@ -372,17 +377,18 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             else {
                 inBuffer = data->buffer.getReadPointer(0, playhead_);
             }
-            float* outBuffer = render_.getWritePointer(0, 0);
-            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn, 0);
-            
-            realDelta *= (realDelta < 0) ? -1 : 1;
+            float* outBuffer = buffer.getWritePointer(0, seg.offset);
+            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
+            interp.reset();
+            realDelta *= (deltaPh < 0) ? -1 : 1;
             playhead_ += realDelta;
+            DBG("real delta2: " << realDelta << "playhead" << playhead_);
         }
 
         if (afterRenderOffset.has_value() && afterRenderValue.has_value()) {
-            const Seg& lastSeg = *segs.end();
-            int lenOut = render_.getNumSamples() - 1 - lastSeg.offset;
-            int deltaPh = (getDeltaPh(*afterRenderValue, lastSeg.value, hostSampleRate_));
+            const auto& lastSeg = segs.getLast();
+            int lenOut = buffer.getNumSamples() - 1 - lastSeg.offset;
+            int deltaPh = (getDeltaPh(lastSeg.value, *afterRenderValue, hostSampleRate_));
             int lenIn = std::abs(deltaPh);
             if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
             double ratio = static_cast<double>(lenIn) / lenOut;
@@ -392,16 +398,26 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             else {
                 inBuffer = data->buffer.getReadPointer(0, playhead_);
             }
-            float* outBuffer = render_.getWritePointer(0, 0);
-            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn, 0);
-
-            realDelta *= (realDelta < 0) ? -1 : 1;
+            float* outBuffer = buffer.getWritePointer(0, lastSeg.offset);
+            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
+            interp.reset();
+            realDelta *= (deltaPh < 0) ? -1 : 1;
             playhead_ += realDelta;
+            DBG("real delta3: " << realDelta << "playhead" << playhead_);
 
+        }
+        else {
+            const auto& lastSeg = segs.getLast();
+            buffer.copyFrom(0, lastSeg.offset, data->buffer.getReadPointer(0, playhead_), outN-lastSeg.offset-1);
+            playhead_ += outN-lastSeg.offset;
         }
 
 
 
+    }
+    else {
+        buffer.copyFrom(0, 0, data->buffer.getReadPointer(0, playhead_),outN);
+        playhead_ += outN;
     }
     
 
@@ -417,29 +433,20 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
     afterRenderOffset.reset();
     afterRenderValue.reset();
-    lastOffset.reset();
-    lastValue.reset();
+
 
 
     for (const auto seg : segs) {
-        DBG("stop:" << seg.offset << "value:" << seg.value);
+        DBG("offset: " << seg.offset << "value: " << seg.value);
     }
     
-    buffer.clear();
 
-    /*if (haveLast_) {
-        for (int ch = 0; ch < outCh; ++ch)
-            buffer.copyFrom(ch, 0, lastBlock_, ch, 0, outN);
-        
-    }*/
+    countPB = 0;
+    segs.clearQuick();
 
-    for (int ch = 0; ch < outCh; ++ch)
-        buffer.copyFrom(ch, 0, render_, ch, 0, outN);
-    
+  
 
-    if (haveLastMidi_) {
-        midiMessages.swapWith(lastMidi_);
-    }
+   
     lastMidi_.swapWith(midiThisBlock);
 
 

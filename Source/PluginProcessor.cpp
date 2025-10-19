@@ -24,7 +24,7 @@ struct Seg { int offset = 0; int value  = 0; };
 int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
     const int delta = end - start;                 // can be negative
     const double frac = static_cast<double>(delta) / 16383.0;   // 14-bit range
-    const double seconds = 6.0 / 7.5;
+    const double seconds = 1.0;
     const double samples = frac * (static_cast<double>(hostSr) * seconds);
     return static_cast<int>(std::lround(samples));
 }
@@ -342,9 +342,10 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         if (preRenderOffset.has_value() && preRenderValue.has_value()) {
             int lenOut = segs[0].offset + 1;
             int deltaPh = (getDeltaPh(*preRenderValue, segs[0].value, hostSampleRate_));
-            int lenIn = std::abs(deltaPh);
+            int lenIn = std::abs(deltaPh );
+            
             if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
-            double ratio = static_cast<double>(lenIn) / lenOut;
+            double ratio = static_cast<double>(lenIn) / (lenOut + outN - *preRenderOffset);
             if (deltaPh < 0) {
                 inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
             }
@@ -387,11 +388,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
         if (afterRenderOffset.has_value() && afterRenderValue.has_value()) {
             const auto& lastSeg = segs.getLast();
-            int lenOut = buffer.getNumSamples() - 1 - lastSeg.offset;
+            int lenOut = outN - 1 - lastSeg.offset;
             int deltaPh = (getDeltaPh(lastSeg.value, *afterRenderValue, hostSampleRate_));
             int lenIn = std::abs(deltaPh);
             if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
-            double ratio = static_cast<double>(lenIn) / lenOut;
+            double ratio = static_cast<double>(lenIn) / (lenOut + *afterRenderOffset)  ;
             if (deltaPh < 0) {
                 inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
             }

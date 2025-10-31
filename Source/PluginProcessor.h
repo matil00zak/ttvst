@@ -34,6 +34,13 @@ public:
     std::shared_ptr<const LoadedAudio> getLoadedReversed() const noexcept;
     void beginLoadFile(const juce::File& file);
     int getDeltaPh(int endVal, int startVal, int hostSr);
+    int renderSeg(LoadedAudioPtr srcAudio,
+        juce::AudioSampleBuffer outBuffer,
+        juce::LagrangeInterpolator interp,
+        double ratio,
+        int lenIn,
+        int lenOut,
+        int numCh);
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;

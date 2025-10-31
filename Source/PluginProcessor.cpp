@@ -24,10 +24,30 @@ struct Seg { int offset = 0; int value  = 0; };
 int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
     const int delta = end - start;                 // can be negative
     const double frac = static_cast<double>(delta) / 16383.0;   // 14-bit range
-    const double seconds = 1.0;
+    const double seconds = 2.0;
     const double samples = frac * (static_cast<double>(hostSr) * seconds);
     return static_cast<int>(std::lround(samples));
 }
+
+
+int PluginTestowy2AudioProcessor::renderSeg(LoadedAudioPtr srcAudio,
+    juce::AudioSampleBuffer outBuffer,
+    juce::LagrangeInterpolator interp,
+    double ratio,
+    int lenIn,
+    int lenOut,
+    int numCh){
+    const float* src = nullptr;
+    int realDelta = 0;
+    for (int ch = 0; ch < numCh; ch++){
+        src = srcAudio->buffer.getReadPointer(ch, playhead_);
+        float* out = outBuffer.getWritePointer(ch, 0);
+        realDelta = interp.process(ratio, src, out, lenOut, lenIn, 0);
+        interp.reset();
+    }
+    return realDelta;
+}
+
 
 static LoadedPair
 loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
@@ -305,6 +325,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
             const int offset = metadata.samplePosition;
+            
             const int val = m.getPitchWheelValue();
             if (segs.isEmpty()) {
                 segs.add({ offset, val});
@@ -331,19 +352,17 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         Seg afterRenderSeg{*afterRenderOffset, *afterRenderValue,};
         DBG("afterRenderSeg created");
     }
-
-    //RENDERING
     bool doit = true;
+    
+    //RENDERING
     if (haveLastMidi_ && !segs.isEmpty() && doit) {
-        
         const float* inBuffer = nullptr;
-
         //render 0 - midiMessage[0]
         if (preRenderOffset.has_value() && preRenderValue.has_value()) {
             int lenOut = segs[0].offset + 1;
             int deltaPh = (getDeltaPh(*preRenderValue, segs[0].value, hostSampleRate_));
-            int lenIn = std::abs(deltaPh );
-            
+            int lenIn = std::abs(deltaPh);
+
             if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
             double ratio = static_cast<double>(lenIn) / (lenOut + outN - *preRenderOffset);
             if (deltaPh < 0) {
@@ -359,9 +378,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
             realDelta *= (deltaPh < 0) ? -1 : 1;
             playhead_ += realDelta;
-            DBG("real delta1: " << realDelta << "playhead" << playhead_);
+            DBG("real delta1: " << realDelta << "playhead: " << playhead_ << "ratio: " << ratio);
         }
-        
+
         //render midiMessage[0] - midiMessage[last]
         for (int i = 0, n = segs.size(); i + 1 < n; ++i) {
             Seg seg = segs[i];
@@ -373,7 +392,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             double ratio = static_cast<double>(lenIn) / lenOut;
             if (deltaPh < 0) {
                 inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
-                
+
             }
             else {
                 inBuffer = data->buffer.getReadPointer(0, playhead_);
@@ -392,7 +411,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             int deltaPh = (getDeltaPh(lastSeg.value, *afterRenderValue, hostSampleRate_));
             int lenIn = std::abs(deltaPh);
             if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
-            double ratio = static_cast<double>(lenIn) / (lenOut + *afterRenderOffset)  ;
+            double ratio = static_cast<double>(lenIn) / (lenOut + *afterRenderOffset);
             if (deltaPh < 0) {
                 inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
             }
@@ -401,23 +420,24 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             }
             float* outBuffer = buffer.getWritePointer(0, lastSeg.offset);
             int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
+            
             interp.reset();
             realDelta *= (deltaPh < 0) ? -1 : 1;
             playhead_ += realDelta;
-            DBG("real delta3: " << realDelta << "playhead" << playhead_);
+            DBG("real delta3: " << realDelta << "playhead" << playhead_ << "ratio: " << ratio);
 
         }
         else {
             const auto& lastSeg = segs.getLast();
-            buffer.copyFrom(0, lastSeg.offset, data->buffer.getReadPointer(0, playhead_), outN-lastSeg.offset-1);
-            playhead_ += outN-lastSeg.offset;
+            buffer.copyFrom(0, lastSeg.offset, data->buffer.getReadPointer(0, playhead_), outN - lastSeg.offset - 1);
+            
+            playhead_ += outN - lastSeg.offset;
         }
-
-
-
     }
     else {
-        buffer.copyFrom(0, 0, data->buffer.getReadPointer(0, playhead_),outN);
+
+        buffer.copyFrom(0, 0, data->buffer.getReadPointer(0, playhead_), outN);
+        
         playhead_ += outN;
     }
     

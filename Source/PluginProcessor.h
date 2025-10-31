@@ -14,6 +14,7 @@
 #include <vector>
 #include "LoadedAudio.h"
 #include "MidiMessageManager.h"
+
 //==============================================================================
 /**
 */
@@ -89,6 +90,7 @@ private:
     int64_t playhead_ = 0;
     int64_t playheadReversed_ = 0;// current read position in source samples
     bool loop_ = true;
+    bool afterRender = false;
     juce::AudioBuffer<float> lastBlock_, render_;
     juce::MidiBuffer lastMidi_;
     bool haveLastMidi_ = false;

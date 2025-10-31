@@ -14,6 +14,7 @@
 #include <pluginterfaces/base/ftypes.h>
 #include <wtypes.h>
 #include <cmath>
+#include "helpers.h"
 //==============================================================================
 using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
 struct Seg { int offset = 0; int value  = 0; };
@@ -59,7 +60,7 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
     const juce::int64 numSamples64 = reader->lengthInSamples;
     if (numChannels <= 0 || numSamples64 <= 0) return {};
 
-    // Uwaga: AudioBuffer rozmiar w int – rzutujemy swiadomie (typowo pliki < 2 31 probek)
+    // Uwaga: AudioBuffer rozmiar w int â€“ rzutujemy swiadomie (typowo pliki < 2 31 probek)
     const int numSamples = (int)numSamples64;
 
     auto out = std::make_shared<LoadedAudio>();
@@ -79,8 +80,8 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
         const int toRead = (int)std::min<juce::int64>(block, numSamples64 - filePos);
 
         // Czytamy bezposrednio do bufora docelowego (destStart = (int)filePos)
-        // Flagi true/true odnosza sis do L/R przy plikach stereo — przy mono/wiecej kanalow
-        // JUCE i tak wypelni dostepne kanaly; to najczestszy przypadek (1–2 ch).
+        // Flagi true/true odnosza sis do L/R przy plikach stereo â€” przy mono/wiecej kanalow
+        // JUCE i tak wypelni dostepne kanaly; to najczestszy przypadek (1â€“2 ch).
         if (!reader->read(&out->buffer,
             (int)filePos,            // destStartSample
             toRead,                   // numSamples
@@ -280,11 +281,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition);
 
-    //for (int ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
-        //buffer.clear(ch, 0, buffer.getNumSamples());
+ 
     buffer.clear();
+    
 
-    // Snapshot the loaded data (atomic load in your getLoaded())
+    //SNAPSHOT LOADED DATA
     auto data = getLoaded();
     auto dataReversed = getLoadedReversed();
     if (!data || !dataReversed) return;
@@ -296,7 +297,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     if (srcN <= 0) return;
 
-    //if host rezized buffer then haveLast = false
     if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN){
         lastBlock_.setSize(outCh, outN, false, true, true);
         render_.setSize(outCh, outN, false, true, true);
@@ -304,11 +304,23 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         haveLastMidi_ = false;
     }
 
-    //render_.clear();
-    //modify the render
-    //struct Seg { int start = 0; int end = 0; int guwno; };
-    juce::Array<Seg, juce::CriticalSection, 16> segs;    
+    //INICJACJA ZBIORU SEGMENTOW
+    juce::Array<Seg, juce::CriticalSection, 16> messagesData;    
 
+    //
+    if (auto first = ttvst::midi::getFirstPitchWheelMessage(midiMessages)) {
+        afterRenderOffset = first->samplePosition;
+        afterRenderValue = first->getMessage().getPitchWheelValue();
+        afterRender = true;
+    }
+    else
+    {
+        afterRenderOffset.reset();
+        afterRenderValue.reset();
+        afterRender = false;
+    }
+
+    /*
     for (const auto metadata : midiMessages) {
         const auto& m = metadata.getMessage();
         if (m.isPitchWheel()) {
@@ -317,127 +329,139 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             break;
         }
     }
+    */
 
-    int countPB = 0;
+
+
+    //JEZELI ISTNIEJE OSTATNI BUFFER TO WYPELNIJ INFO SEGMENTOW
+    //SEGMENTY SA DLA DANYCH Z LAST MIDI BUFFER, NIE Z AKTUALNEGO
     if (haveLastMidi_) {
-        
+        int countPB = 0;
         for (const auto metadata : lastMidi_) {
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
             const int offset = metadata.samplePosition;
-            
             const int val = m.getPitchWheelValue();
-            if (segs.isEmpty()) {
-                segs.add({ offset, val});
-            }
-            else {
-                //float playheadMovement = (val-*lastValue) / 0.75 * hostSampleRate_ / 16000;
-                if (lastOffset) {
-                    segs.add({ offset, val });
-                }
-            }
-            ++countPB;
+            messagesData.add({ offset, val });
             lastOffset = offset;
             lastValue = val;
+            ++countPB;
         }
         DBG("PB count:" << countPB);
+        for (const auto data : messagesData) {
+            DBG("offset: " << data.offset << " value: " << data.value);
+        }
     }
 
+    //NIEUZYWANE
+    /*
     if (preRenderOffset && preRenderValue) {
         Seg preRenderSeg{*preRenderOffset, *preRenderValue};
         DBG("preRenderSeg created");
     }
-
+    */ 
+    //NIEUZYWANE
+    /*
     if (afterRenderOffset) {
-        Seg afterRenderSeg{*afterRenderOffset, *afterRenderValue,};
+        Seg afterRenderSeg{*afterRenderOffset, *afterRenderValue};
         DBG("afterRenderSeg created");
     }
+    */
     bool doit = true;
     
     //RENDERING
-    if (haveLastMidi_ && !segs.isEmpty() && doit) {
+    if (haveLastMidi_ && !messagesData.isEmpty() && doit) {
         const float* inBuffer = nullptr;
+        int realDelta = 0;
         //render 0 - midiMessage[0]
         if (preRenderOffset.has_value() && preRenderValue.has_value()) {
-            int lenOut = segs[0].offset + 1;
-            int deltaPh = (getDeltaPh(*preRenderValue, segs[0].value, hostSampleRate_));
-            int lenIn = std::abs(deltaPh);
+            int lenOut = messagesData[0].offset;//this
+            if (lenOut > 1) {
+                int deltaPh = (getDeltaPh(*preRenderValue, messagesData[0].value, hostSampleRate_));
+                int lenIn = std::abs(deltaPh);
+                if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
+                double ratio = static_cast<double>(lenIn) / (lenOut + outN - *preRenderOffset);
+                for (int ch = 0; ch < outCh; ch++) {
+                    if (deltaPh < 0) {
+                        inBuffer = dataReversed->buffer.getReadPointer(ch, srcN - 1 - playhead_);
+                    }
+                    else {
+                        inBuffer = data->buffer.getReadPointer(ch, playhead_);
+                    }
+                    float* outBuffer = buffer.getWritePointer(ch, 0);
 
-            if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
-            double ratio = static_cast<double>(lenIn) / (lenOut + outN - *preRenderOffset);
-            if (deltaPh < 0) {
-                inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
+                    realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + outN, 0);
+                    interp.reset();
+                }
+
+                realDelta *= (deltaPh < 0) ? -1 : 1;
+                playhead_ += realDelta;
+                DBG("real delta " << "f: " << realDelta << " playhead: " << playhead_ << " ratio: " << ratio);
             }
-            else {
-                inBuffer = data->buffer.getReadPointer(0, playhead_);
-            }
-            float* outBuffer = buffer.getWritePointer(0, 0);
-
-            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
-            interp.reset();
-
-            realDelta *= (deltaPh < 0) ? -1 : 1;
-            playhead_ += realDelta;
-            DBG("real delta1: " << realDelta << "playhead: " << playhead_ << "ratio: " << ratio);
         }
 
         //render midiMessage[0] - midiMessage[last]
-        for (int i = 0, n = segs.size(); i + 1 < n; ++i) {
-            Seg seg = segs[i];
-            Seg next = segs[i + 1];
+        for (int i = 0, n = messagesData.size(); i + 1 < n; ++i) {
+            realDelta = 0;
+            Seg seg = messagesData[i];
+            Seg next = messagesData[i + 1];
             int lenOut = next.offset - seg.offset;
             int deltaPh = (getDeltaPh(seg.value, next.value, hostSampleRate_));
             int lenIn = std::abs(deltaPh);
             if (lenOut <= 0 || lenIn <= 0) continue; // or continue / set ratio=1
             double ratio = static_cast<double>(lenIn) / lenOut;
-            if (deltaPh < 0) {
-                inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
+            for (int ch = 0; ch < outCh; ch++) {
+                if (deltaPh < 0) {
+                    inBuffer = dataReversed->buffer.getReadPointer(ch, srcN - 1 - playhead_);
 
+                }
+                else {
+                    inBuffer = data->buffer.getReadPointer(ch, playhead_);
+                }
+                float* outBuffer = buffer.getWritePointer(ch, seg.offset);
+                realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
+                interp.reset();
             }
-            else {
-                inBuffer = data->buffer.getReadPointer(0, playhead_);
-            }
-            float* outBuffer = buffer.getWritePointer(0, seg.offset);
-            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
-            interp.reset();
             realDelta *= (deltaPh < 0) ? -1 : 1;
             playhead_ += realDelta;
-            DBG("real delta2: " << realDelta << "playhead" << playhead_);
+            DBG("real delta " << i << " " << realDelta << " playhead: " << playhead_ << " ratio: " << ratio);
         }
 
         if (afterRenderOffset.has_value() && afterRenderValue.has_value()) {
-            const auto& lastSeg = segs.getLast();
+            realDelta = 0;
+            const auto& lastSeg = messagesData.getLast();
             int lenOut = outN - 1 - lastSeg.offset;
             int deltaPh = (getDeltaPh(lastSeg.value, *afterRenderValue, hostSampleRate_));
             int lenIn = std::abs(deltaPh);
             if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
             double ratio = static_cast<double>(lenIn) / (lenOut + *afterRenderOffset);
-            if (deltaPh < 0) {
-                inBuffer = dataReversed->buffer.getReadPointer(0, srcN - 1 - playhead_);
+            for (int ch = 0; ch < outCh; ch++) {
+                if (deltaPh < 0) {
+                    inBuffer = dataReversed->buffer.getReadPointer(ch, srcN - 1 - playhead_);
+                }
+                else {
+                    inBuffer = data->buffer.getReadPointer(ch, playhead_);
+                }
+                float* outBuffer = buffer.getWritePointer(ch, lastSeg.offset);
+                realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
+                interp.reset();
             }
-            else {
-                inBuffer = data->buffer.getReadPointer(0, playhead_);
-            }
-            float* outBuffer = buffer.getWritePointer(0, lastSeg.offset);
-            int realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
-            
-            interp.reset();
             realDelta *= (deltaPh < 0) ? -1 : 1;
             playhead_ += realDelta;
-            DBG("real delta3: " << realDelta << "playhead" << playhead_ << "ratio: " << ratio);
-
+            DBG("real delta " << "l: " << realDelta << " playhead: " << playhead_ << " ratio: " << ratio);
         }
         else {
-            const auto& lastSeg = segs.getLast();
-            buffer.copyFrom(0, lastSeg.offset, data->buffer.getReadPointer(0, playhead_), outN - lastSeg.offset - 1);
-            
+            const auto& lastSeg = messagesData.getLast();
+            for (int ch = 0; ch < outCh; ch++) {
+                buffer.copyFrom(ch, lastSeg.offset, data->buffer.getReadPointer(ch, playhead_), outN - lastSeg.offset - 1);
+            }
             playhead_ += outN - lastSeg.offset;
         }
     }
     else {
-
-        buffer.copyFrom(0, 0, data->buffer.getReadPointer(0, playhead_), outN);
-        
+        for (int ch = 0; ch < outCh; ch++) {
+            buffer.copyFrom(ch, 0, data->buffer.getReadPointer(ch, playhead_), outN);
+        }
         playhead_ += outN;
     }
     
@@ -457,13 +481,10 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
 
 
-    for (const auto seg : segs) {
-        DBG("offset: " << seg.offset << "value: " << seg.value);
-    }
+    
     
 
-    countPB = 0;
-    segs.clearQuick();
+    messagesData.clearQuick();
 
   
 

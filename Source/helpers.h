@@ -11,40 +11,22 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 #include <juce_audio_basics/juce_audio_basics.h>
 
-namespace ttvst::midi
-{
-    [[nodiscard]] inline std::optional<juce::MidiMessageMetadata>
-        getLastPitchWheelMessage(const juce::MidiBuffer& buffer) noexcept
-    {
-        std::optional<juce::MidiMessageMetadata> last;
+namespace ttvst::helps
+{   
+    using intPair = std::pair<int, int>;
+    using pairVector = std::vector<intPair>;
 
-        for (auto metadata : buffer)
-        {
-            const auto& m = metadata.getMessage();
-            if (m.isPitchWheel())
-                last = metadata;
-        }
+    std::optional<juce::MidiMessageMetadata> getLastPitchWheelMessage(const juce::MidiBuffer& buffer);
 
-        return last;
-    }
+    std::optional<juce::MidiMessageMetadata> getFirstPitchWheelMessage(const juce::MidiBuffer& buffer);
 
+    std::optional<ttvst::helps::pairVector> getPitchWheelMsgPairVec(const juce::MidiBuffer& buffer);
 
-    [[nodiscard]] inline std::optional<juce::MidiMessageMetadata>
-        getFirstPitchWheelMessage(const juce::MidiBuffer& buffer) noexcept
-    {
-        for (auto metadata : buffer)
-        {
-            if (metadata.getMessage().isPitchWheel()) {
-                
-                return metadata;
-            }
-        }   
-        return std::nullopt;
-    }
+    std::optional<std::vector<int>> getPitchWheelValueVector(const juce::MidiBuffer& buffer);
 
-    
-
+    std::optional<std::vector<int>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer);
 
 } // namespace ttvst::midi

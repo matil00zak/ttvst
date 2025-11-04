@@ -14,6 +14,7 @@
 #include <vector>
 #include "LoadedAudio.h"
 #include "MidiMessageManager.h"
+#include "helpers.h"
 
 //==============================================================================
 /**
@@ -85,16 +86,17 @@ private:
     ttvst::MidiMessageManager midiLog_;
     std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
     std::optional<int> lastValue, afterRenderValue, preRenderValue;
+    std::vector<double> offsets_, values_;
     enum block { pre, render, after };
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay
     int64_t playhead_ = 0;
     int64_t playheadReversed_ = 0;// current read position in source samples
     bool loop_ = true;
     bool afterRender = false;
-    juce::AudioBuffer<float> lastBlock_, render_;
+    juce::AudioBuffer<float> lastBlock_;
     juce::MidiBuffer lastMidi_;
     bool haveLastMidi_ = false;
     bool haveLast_ = false;
-    juce::LagrangeInterpolator interp;
+    juce::LinearInterpolator interp;
 
 };

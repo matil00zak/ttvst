@@ -15,6 +15,7 @@
 #include <wtypes.h>
 #include <cmath>
 #include "helpers.h"
+#include "cubicSplines.h"
 //==============================================================================
 using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
 struct Seg { int offset = 0; int value  = 0; };
@@ -271,229 +272,107 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 
 void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {   
+    using namespace ttvst::helps;
+    using namespace ttvst::splines;
     juce::ScopedNoDenormals _;
     juce::MidiBuffer midiThisBlock = midiMessages;
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
     
     // Capture MIDI for the UI
-    
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition);
-
- 
-    buffer.clear();
     
+    buffer.clear();
+    offsets_ = {};
+    values_ = {};
 
-    //SNAPSHOT LOADED DATA
+    //Snapshot loaded data
     auto data = getLoaded();
     auto dataReversed = getLoadedReversed();
     if (!data || !dataReversed) return;
     const int srcCh = data->buffer.getNumChannels();
     const int srcN = data->buffer.getNumSamples();
-
     const int outCh = buffer.getNumChannels();
     const int outN = buffer.getNumSamples();
-
     if (srcN <= 0) return;
-
+    
+    //IF HOST RESIZES BUFFER THEN DROP LAST BLOCK AND UPDATE LAST BLOCK SIZE
     if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN){
         lastBlock_.setSize(outCh, outN, false, true, true);
-        render_.setSize(outCh, outN, false, true, true);
-        haveLast_ = false; 
+        DBG("block resized");
         haveLastMidi_ = false;
     }
 
-    //INICJACJA ZBIORU SEGMENTOW
-    juce::Array<Seg, juce::CriticalSection, 16> messagesData;    
-
-    //
-    if (auto first = ttvst::midi::getFirstPitchWheelMessage(midiMessages)) {
+    //Get and insert fitst pitchwheel value and offset for later rendering. if no message then state we dont have it and reset
+    if (auto first = getFirstPitchWheelMessage(midiMessages)) {
         afterRenderOffset = first->samplePosition;
         afterRenderValue = first->getMessage().getPitchWheelValue();
         afterRender = true;
     }
-    else
-    {
-        afterRenderOffset.reset();
-        afterRenderValue.reset();
+    else{
         afterRender = false;
+        DBG("no after render to push");
     }
 
-    /*
-    for (const auto metadata : midiMessages) {
-        const auto& m = metadata.getMessage();
-        if (m.isPitchWheel()) {
-            afterRenderOffset = metadata.samplePosition;
-            afterRenderValue = m.getPitchWheelValue();
-            break;
-        }
-    }
-    */
-
-
-
-    //JEZELI ISTNIEJE OSTATNI BUFFER TO WYPELNIJ INFO SEGMENTOW
-    //SEGMENTY SA DLA DANYCH Z LAST MIDI BUFFER, NIE Z AKTUALNEGO
+    //Zaladuj offsety i wartosci z ostatniego buffora do wektorow
     if (haveLastMidi_) {
-        int countPB = 0;
-        for (const auto metadata : lastMidi_) {
-            const auto& m = metadata.getMessage();
-            if (!m.isPitchWheel()) continue;
-            const int offset = metadata.samplePosition;
-            const int val = m.getPitchWheelValue();
-            messagesData.add({ offset, val });
-            lastOffset = offset;
-            lastValue = val;
-            ++countPB;
-        }
-        DBG("PB count:" << countPB);
-        for (const auto data : messagesData) {
-            DBG("offset: " << data.offset << " value: " << data.value);
-        }
-    }
-
-    //NIEUZYWANE
-    /*
-    if (preRenderOffset && preRenderValue) {
-        Seg preRenderSeg{*preRenderOffset, *preRenderValue};
-        DBG("preRenderSeg created");
-    }
-    */ 
-    //NIEUZYWANE
-    /*
-    if (afterRenderOffset) {
-        Seg afterRenderSeg{*afterRenderOffset, *afterRenderValue};
-        DBG("afterRenderSeg created");
-    }
-    */
-    bool doit = true;
-    
-    //RENDERING
-    if (haveLastMidi_ && !messagesData.isEmpty() && doit) {
-        const float* inBuffer = nullptr;
-        int realDelta = 0;
-        //render 0 - midiMessage[0]
-        if (preRenderOffset.has_value() && preRenderValue.has_value()) {
-            int lenOut = messagesData[0].offset;//this
-            if (lenOut > 1) {
-                int deltaPh = (getDeltaPh(*preRenderValue, messagesData[0].value, hostSampleRate_));
-                int lenIn = std::abs(deltaPh);
-                if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
-                double ratio = static_cast<double>(lenIn) / (lenOut + outN - *preRenderOffset);
-                for (int ch = 0; ch < outCh; ch++) {
-                    if (deltaPh < 0) {
-                        inBuffer = dataReversed->buffer.getReadPointer(ch, srcN - 1 - playhead_);
-                    }
-                    else {
-                        inBuffer = data->buffer.getReadPointer(ch, playhead_);
-                    }
-                    float* outBuffer = buffer.getWritePointer(ch, 0);
-
-                    realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + outN, 0);
-                    interp.reset();
-                }
-
-                realDelta *= (deltaPh < 0) ? -1 : 1;
-                playhead_ += realDelta;
-                DBG("real delta " << "f: " << realDelta << " playhead: " << playhead_ << " ratio: " << ratio);
-            }
-        }
-
-        //render midiMessage[0] - midiMessage[last]
-        for (int i = 0, n = messagesData.size(); i + 1 < n; ++i) {
-            realDelta = 0;
-            Seg seg = messagesData[i];
-            Seg next = messagesData[i + 1];
-            int lenOut = next.offset - seg.offset;
-            int deltaPh = (getDeltaPh(seg.value, next.value, hostSampleRate_));
-            int lenIn = std::abs(deltaPh);
-            if (lenOut <= 0 || lenIn <= 0) continue; // or continue / set ratio=1
-            double ratio = static_cast<double>(lenIn) / lenOut;
-            for (int ch = 0; ch < outCh; ch++) {
-                if (deltaPh < 0) {
-                    inBuffer = dataReversed->buffer.getReadPointer(ch, srcN - 1 - playhead_);
-
-                }
-                else {
-                    inBuffer = data->buffer.getReadPointer(ch, playhead_);
-                }
-                float* outBuffer = buffer.getWritePointer(ch, seg.offset);
-                realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
-                interp.reset();
-            }
-            realDelta *= (deltaPh < 0) ? -1 : 1;
-            playhead_ += realDelta;
-            DBG("real delta " << i << " " << realDelta << " playhead: " << playhead_ << " ratio: " << ratio);
-        }
-
-        if (afterRenderOffset.has_value() && afterRenderValue.has_value()) {
-            realDelta = 0;
-            const auto& lastSeg = messagesData.getLast();
-            int lenOut = outN - 1 - lastSeg.offset;
-            int deltaPh = (getDeltaPh(lastSeg.value, *afterRenderValue, hostSampleRate_));
-            int lenIn = std::abs(deltaPh);
-            if (lenOut <= 0 || lenIn <= 0) return; // or continue / set ratio=1
-            double ratio = static_cast<double>(lenIn) / (lenOut + *afterRenderOffset);
-            for (int ch = 0; ch < outCh; ch++) {
-                if (deltaPh < 0) {
-                    inBuffer = dataReversed->buffer.getReadPointer(ch, srcN - 1 - playhead_);
-                }
-                else {
-                    inBuffer = data->buffer.getReadPointer(ch, playhead_);
-                }
-                float* outBuffer = buffer.getWritePointer(ch, lastSeg.offset);
-                realDelta = interp.process(ratio, inBuffer, outBuffer, lenOut, lenIn + 500, 0);
-                interp.reset();
-            }
-            realDelta *= (deltaPh < 0) ? -1 : 1;
-            playhead_ += realDelta;
-            DBG("real delta " << "l: " << realDelta << " playhead: " << playhead_ << " ratio: " << ratio);
+        if (getPitchWheelOffsetsVector(lastMidi_) && getPitchWheelValueVector(lastMidi_)) {
+            auto off = getPitchWheelOffsetsVector(lastMidi_);
+            offsets_.insert(offsets_.begin(), off->begin(), off->end());
+            auto val = getPitchWheelValueVector(lastMidi_);
+            values_.insert(values_.begin(), val->begin(), val->end());
+            DBG("last buffer messages pushed");
         }
         else {
-            const auto& lastSeg = messagesData.getLast();
-            for (int ch = 0; ch < outCh; ch++) {
-                buffer.copyFrom(ch, lastSeg.offset, data->buffer.getReadPointer(ch, playhead_), outN - lastSeg.offset - 1);
-            }
-            playhead_ += outN - lastSeg.offset;
+            DBG("vectors bad");
         }
     }
-    else {
-        for (int ch = 0; ch < outCh; ch++) {
-            buffer.copyFrom(ch, 0, data->buffer.getReadPointer(ch, playhead_), outN);
+
+    if (!offsets_.empty() && !values_.empty()) {
+        if (preRenderOffset && preRenderValue) {
+            offsets_.push_back(*preRenderOffset);
+            values_.push_back(*preRenderValue);
+            DBG("pre render msg pushed");
         }
-        playhead_ += outN;
+        else {
+            preRenderOffset.reset();
+            preRenderValue.reset();
+            DBG("no pre render message to push");
+        }
     }
-    
-
 
     
-    if (lastOffset && lastValue) {
-        preRenderOffset = *lastOffset;
-        preRenderValue = *lastValue;
+    
+
+    if (!offsets_.empty() && !values_.empty()) {
+        vector<splineSet> splineSet = spline(offsets_, values_);
+        vector<double> Y = createPositionVector(splineSet, offsets_, values_);
+        save_vector_csv("dblVec.csv", Y, 12);
+        DBG("vector creation executed");
     }
     else {
-        preRenderOffset.reset();
-        preRenderValue.reset();
+        DBG("no messages to create vector from");
     }
-    afterRenderOffset.reset();
-    afterRenderValue.reset();
+    if (haveLastMidi_) {
+        if (auto meta = getLastPitchWheelMessage(lastMidi_)) {
+            meta = getLastPitchWheelMessage(lastMidi_);
+            preRenderOffset = -outN + meta->samplePosition; // offset wzgledem render buffera - jest ujemny
+            preRenderValue = meta->getMessage().getPitchWheelValue();
+            DBG("pre render data updated");
+        }
+    }
 
 
+    //do preety line
 
-    
-    
+    offsets_.clear();
+    values_.clear();
+    if (!midiThisBlock.isEmpty()) {
+        lastMidi_.swapWith(midiThisBlock);
+        haveLastMidi_ = true;
+    }
 
-    messagesData.clearQuick();
-
-  
-
-   
-    lastMidi_.swapWith(midiThisBlock);
-
-
-    haveLastMidi_ = true;
-    haveLast_ = true;
 }
 
 //==============================================================================

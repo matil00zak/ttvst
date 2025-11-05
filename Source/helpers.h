@@ -25,8 +25,10 @@ namespace ttvst::helps
 
     std::optional<ttvst::helps::pairVector> getPitchWheelMsgPairVec(const juce::MidiBuffer& buffer);
 
-    std::optional<std::vector<int>> getPitchWheelValueVector(const juce::MidiBuffer& buffer);
+    std::optional<std::vector<double>> getPitchWheelValueVector(const juce::MidiBuffer& buffer);
 
-    std::optional<std::vector<int>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer);
+    std::optional<std::vector<double>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer);
+
+    bool hasPitchWheelMessage(const juce::MidiBuffer& buffer);
 
 } // namespace ttvst::midi

@@ -63,8 +63,8 @@ namespace ttvst::helps {
         
     }
 
-    std::optional<std::vector<int>> getPitchWheelValueVector(const juce::MidiBuffer& buffer) {
-        std::vector<int> values;
+    std::optional<std::vector<double>> getPitchWheelValueVector(const juce::MidiBuffer& buffer) {
+        std::vector<double> values;
         if (buffer.isEmpty()) {
             return std::nullopt;
             DBG("No messages in this buffer");
@@ -74,7 +74,7 @@ namespace ttvst::helps {
             if (!m.isPitchWheel()) continue;
             int value = m.getPitchWheelValue();
             values.push_back(value);
-            DBG("values in this buffer: " << values.size());
+            //DBG("values in this buffer: " << values.size());
         }
         if (values.empty()) {
             return std::nullopt;
@@ -83,11 +83,11 @@ namespace ttvst::helps {
         return values;
     }
 
-    std::optional<std::vector<int>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer) {
-        std::vector<int> offsets;
+    std::optional<std::vector<double>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer) {
+        std::vector<double> offsets;
         if (buffer.isEmpty()) {
             return std::nullopt;
-            DBG("No messages in this buffer");
+            //DBG("No messages in this buffer");
         }
         for (const auto metadata : buffer) {
             const auto& m = metadata.getMessage();
@@ -97,11 +97,20 @@ namespace ttvst::helps {
         }
         if (offsets.empty()) {
             return std::nullopt;
-            DBG("No pitch wheel messages in this buffer");
+            //DBG("No pitch wheel messages in this buffer");
         }
         return offsets;
     }
     
+
+    bool hasPitchWheelMessage(const juce::MidiBuffer& buffer) {
+        for (auto meta : buffer) {
+            if (meta.getMessage().isPitchWheel()) {
+                return true;
+            }        
+        }
+        return true;
+    }
 
 }
 

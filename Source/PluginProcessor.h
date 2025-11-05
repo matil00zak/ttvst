@@ -93,6 +93,7 @@ private:
     int64_t playheadReversed_ = 0;// current read position in source samples
     bool loop_ = true;
     bool afterRender = false;
+    bool preRender = false;
     juce::AudioBuffer<float> lastBlock_;
     juce::MidiBuffer lastMidi_;
     bool haveLastMidi_ = false;

@@ -304,73 +304,86 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         haveLastMidi_ = false;
     }
 
-    //Get and insert fitst pitchwheel value and offset for later rendering. if no message then state we dont have it and reset
+    //set after render message (after offset is message_ofset + outN)
     if (auto first = getFirstPitchWheelMessage(midiMessages)) {
         afterRenderOffset = first->samplePosition;
         afterRenderValue = first->getMessage().getPitchWheelValue();
         afterRender = true;
     }
     else{
+        afterRenderOffset.reset();
+        afterRenderOffset.reset();
         afterRender = false;
         DBG("no after render to push");
     }
 
-    //Zaladuj offsety i wartosci z ostatniego buffora do wektorow
+    //push last midi messages
     if (haveLastMidi_) {
-        if (getPitchWheelOffsetsVector(lastMidi_) && getPitchWheelValueVector(lastMidi_)) {
-            auto off = getPitchWheelOffsetsVector(lastMidi_);
-            offsets_.insert(offsets_.begin(), off->begin(), off->end());
-            auto val = getPitchWheelValueVector(lastMidi_);
-            values_.insert(values_.begin(), val->begin(), val->end());
-            DBG("last buffer messages pushed");
-        }
-        else {
-            DBG("vectors bad");
+        auto optOff = getPitchWheelOffsetsVector(lastMidi_);
+        auto optVal = getPitchWheelValueVector(lastMidi_);
+        if (optOff && optVal) {
+            offsets_ = std::move(*optOff);
+            values_ = std::move(*optVal);
         }
     }
 
-    if (!offsets_.empty() && !values_.empty()) {
-        if (preRenderOffset && preRenderValue) {
-            offsets_.push_back(*preRenderOffset);
-            values_.push_back(*preRenderValue);
-            DBG("pre render msg pushed");
-        }
-        else {
-            preRenderOffset.reset();
-            preRenderValue.reset();
-            DBG("no pre render message to push");
-        }
+    //push pre render messages (pre render offset is offset - outN and is negative)
+    if (preRenderOffset && preRenderValue) {
+        preRender = true;
+        offsets_.insert(offsets_.begin(), *preRenderOffset - outN);
+        values_.insert(values_.begin(), *preRenderValue - outN);
+        DBG("pre render msg pushed");
     }
 
-    
-    
+    if (afterRenderOffset && afterRenderValue) {
+        offsets_.push_back(*afterRenderOffset + outN);
+        values_.push_back(*afterRenderValue);
+        DBG("after render msg pushed");
+    }
+    for (double offset : offsets_) {
+        DBG("offset: " << offset);
+    }
 
+
+    
     if (!offsets_.empty() && !values_.empty()) {
         vector<splineSet> splineSet = spline(offsets_, values_);
         vector<double> Y = createPositionVector(splineSet, offsets_, values_);
-        save_vector_csv("dblVec.csv", Y, 12);
         DBG("vector creation executed");
+        save_vector_csv("dblVec.csv", Y, 12);
     }
     else {
         DBG("no messages to create vector from");
     }
+
+    //put last message in memory
     if (haveLastMidi_) {
         if (auto meta = getLastPitchWheelMessage(lastMidi_)) {
             meta = getLastPitchWheelMessage(lastMidi_);
-            preRenderOffset = -outN + meta->samplePosition; // offset wzgledem render buffera - jest ujemny
+            preRenderOffset = meta->samplePosition; 
             preRenderValue = meta->getMessage().getPitchWheelValue();
             DBG("pre render data updated");
         }
+        else {
+            DBG("no pitch wheel message in last midi");
+            preRenderOffset.reset();
+            preRenderOffset.reset();
+        }
     }
-
-
-    //do preety line
+    else {
+        DBG("no last midi");
+    }
 
     offsets_.clear();
     values_.clear();
-    if (!midiThisBlock.isEmpty()) {
-        lastMidi_.swapWith(midiThisBlock);
+    afterRenderOffset.reset();
+    afterRenderValue.reset();
+    if (hasPitchWheelMessage(midiMessages)) {
+        lastMidi_.swapWith(midiMessages);
         haveLastMidi_ = true;
+    }
+    else {
+        haveLastMidi_ = false;
     }
 
 }

@@ -42,7 +42,7 @@ namespace ttvst::splines {
                 pos.push_back(spl.a + spl.b * tj + spl.c * pow(tj, 2) + spl.d * pow(tj, 3));
             }
         }
-        return ;
+        return pos;
     }
 
 

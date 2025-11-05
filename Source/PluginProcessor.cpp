@@ -196,8 +196,6 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     playhead_ = 0; // reset on (re)start
     playheadReversed_ = 0;
     setLatencySamples(samplesPerBlock);
-    preRenderOffset = 0;
-    preRenderValue = 0;
     
 }
 
@@ -296,7 +294,15 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const int outCh = buffer.getNumChannels();
     const int outN = buffer.getNumSamples();
     if (srcN <= 0) return;
+
+    if (haveLastMidi_) {
+        DBG("BUFFER START. haveLastMidi: true");
+    }
+    else {
+        DBG("BUFFER START. haveLastMidi: false");
+    }
     
+
     //IF HOST RESIZES BUFFER THEN DROP LAST BLOCK AND UPDATE LAST BLOCK SIZE
     if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN){
         lastBlock_.setSize(outCh, outN, false, true, true);
@@ -308,12 +314,10 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     if (auto first = getFirstPitchWheelMessage(midiMessages)) {
         afterRenderOffset = first->samplePosition;
         afterRenderValue = first->getMessage().getPitchWheelValue();
-        afterRender = true;
     }
     else{
         afterRenderOffset.reset();
         afterRenderOffset.reset();
-        afterRender = false;
         DBG("no after render to push");
     }
 
@@ -328,19 +332,24 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
 
     //push pre render messages (pre render offset is offset - outN and is negative)
-    if (preRenderOffset && preRenderValue) {
+    /*if (preRenderOffset && preRenderValue) {
         preRender = true;
-        offsets_.insert(offsets_.begin(), *preRenderOffset - outN);
-        values_.insert(values_.begin(), *preRenderValue - outN);
+        offsets_.insert(offsets_.begin(), *preRenderOffset);
+        values_.insert(values_.begin(), *preRenderValue);
         DBG("pre render msg pushed");
     }
-
+    else {
+        preRender = false;
+    }
+    */
     if (afterRenderOffset && afterRenderValue) {
         offsets_.push_back(*afterRenderOffset + outN);
         values_.push_back(*afterRenderValue);
+        afterRender = true;
         DBG("after render msg pushed");
     }
     for (double offset : offsets_) {
+        afterRender = false;
         DBG("offset: " << offset);
     }
 
@@ -348,16 +357,33 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     
     if (!offsets_.empty() && !values_.empty()) {
         vector<splineSet> splineSet = spline(offsets_, values_);
-        vector<double> Y = createPositionVector(splineSet, offsets_, values_);
+        vector<double> Y = createPositionVector(splineSet, offsets_, values_, outN, preRender, afterRender);
+        if (!Y.empty()) {
+            preRenderValue = Y.back();
+            preRenderOffset = -1;
+            preRender = true;
+        }
+        else {
+            preRenderValue.reset();
+            preRenderValue.reset();
+            preRender = false;
+        }
         DBG("vector creation executed");
-        save_vector_csv("dblVec.csv", Y, 12);
+        //save_vector_csv("dblVec.csv", Y, 12);
+        if (!Y.empty()) {
+            append_vector_csv("longVector15.csv", Y, 12);
+            DBG("appended vector of length: " << Y.size());
+        }
+        else {
+            DBG("position vector is empty");
+        }
     }
     else {
         DBG("no messages to create vector from");
     }
 
     //put last message in memory
-    if (haveLastMidi_) {
+    if (haveLastMidi_ && !preRenderValue.has_value()) {
         if (auto meta = getLastPitchWheelMessage(lastMidi_)) {
             meta = getLastPitchWheelMessage(lastMidi_);
             preRenderOffset = meta->samplePosition; 
@@ -384,6 +410,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
     else {
         haveLastMidi_ = false;
+        lastMidi_.clear();
+        preRenderOffset.reset();
+        preRenderValue.reset();
     }
 
 }

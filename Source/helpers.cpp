@@ -53,7 +53,7 @@ namespace ttvst::helps {
             const int val = m.getPitchWheelValue();
             intPair msg = { offset, val };
             messages.push_back(msg);
-            DBG("midi messages in this buffer: " << messages.size());
+            DBG("helpers::pairVec: midi messages in this buffer: " << messages.size());
         }
         if (messages.empty()) {
             return std::nullopt;
@@ -93,7 +93,7 @@ namespace ttvst::helps {
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
             offsets.push_back(metadata.samplePosition);
-            DBG("offsets in this buffer: " << offsets.size());
+            DBG("helpers::offsetsVector: offsets in this buffer: " << offsets.size());
         }
         if (offsets.empty()) {
             return std::nullopt;
@@ -109,7 +109,7 @@ namespace ttvst::helps {
                 return true;
             }        
         }
-        return true;
+        return false;
     }
 
 }

@@ -85,7 +85,7 @@ private:
     std::shared_ptr<const LoadedAudio> loaded_, loadedReversed_;
     ttvst::MidiMessageManager midiLog_;
     std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
-    std::optional<int> lastValue, afterRenderValue, preRenderValue;
+    std::optional<double> lastValue, afterRenderValue, preRenderValue;
     std::vector<double> offsets_, values_;
     enum block { pre, render, after };
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay

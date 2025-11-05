@@ -17,6 +17,10 @@
 #include <iomanip>
 #include <stdexcept>
 
+#include <string>
+#include <filesystem> // C++17
+
+
 using namespace std;
 
 namespace ttvst::splines {
@@ -33,15 +37,50 @@ namespace ttvst::splines {
         double x;
     };
 
-    vector<double> createPositionVector(vector<splineSet> cs, vec x, vec y) {
-        vec pos;
-        for (int j = 0; j < x.size() - 1; j++) {
-            auto spl = cs[j];
-            for (int t = x[j]; t < x[j + 1]; t++) {
-                int tj = t - spl.x;
-                pos.push_back(spl.a + spl.b * tj + spl.c * pow(tj, 2) + spl.d * pow(tj, 3));
-            }
+    vector<double> createPositionVector(vector<splineSet> cs, vec x, vec y, int outN, bool prerender, bool afterrender) {
+        // must have at least two points and same length
+        if (x.size() <= 1 || y.size() <= 1 || x.size() != y.size()) {
+            return {}; // empty result: nothing to do
         }
+        if (!prerender || !afterrender) {
+            return {};
+        }
+        vec pos;
+        //iterate through splines
+        for (int i = 0; i < x.size() - 1; i++) {
+            int spl_end;
+            auto spl = cs[i];
+            int ts = cs[i].x;
+            if (cs[i].x < 0) {
+                ts = 0;
+            }
+            if (x[i + 1] > outN) {
+                spl_end = outN;
+            }
+            else {
+                spl_end = x[i + 1];
+            }
+
+            //append position values from the spline start to the next spline start
+            for (int t = ts; t < spl_end; t++) {
+                int ti = t - spl.x;
+                pos.push_back(spl.a + spl.b * ti + spl.c * pow(ti, 2) + spl.d * pow(ti, 3));
+            }
+
+        }
+        /*
+        if (prerender) {
+            pos.erase(pos.begin(), pos.begin() + x[0]);
+        }
+        if (afterrender) {
+            pos.resize((pos.size() - (outN - x[x.size() - 1])));
+        }
+        DBG("position vector size: " << pos.size());
+        */
+        
+
+
+
         return pos;
     }
 
@@ -59,8 +98,45 @@ namespace ttvst::splines {
         DBG("vector saved");
     }
 
+    void append_vector_csv(const std::string& path,
+        const std::vector<double>& v,
+        int precision = 12)
+    {
+        if (v.empty()) return; // nothing to append
+
+        // If the file exists and is non-empty, check whether the last byte is '\n'.
+        // If the file doesn't exist, ofstream with ios::app will create it.
+        bool need_leading_newline = false;
+        if (std::filesystem::exists(path)) {
+            std::ifstream ifs(path, std::ios::binary);
+            if (ifs) {
+                ifs.seekg(0, std::ios::end);
+                std::streampos sz = ifs.tellg();
+                if (sz > 0) {
+                    ifs.seekg(-1, std::ios::end);
+                    char last = ifs.get();
+                    if (last != '\n') need_leading_newline = true;
+                }
+            }
+        }
+
+        std::ofstream ofs(path, std::ios::app);
+        if (!ofs) throw std::runtime_error("Failed to open " + path + " for appending");
+
+        ofs << std::fixed << std::setprecision(precision);
+        if (need_leading_newline) ofs << '\n';
+
+        for (double val : v) ofs << val << '\n';
+    }
+
+
     //we wish to find set of n splines S_i(x) for i = 0, ..., i = n - 1	
     vector<splineSet> spline(vec& x, vec& y) {
+        // must have at least two points and same length
+        if (x.size() <= 1 || y.size() <= 1 || x.size() != y.size()) {
+            return {}; // empty result: nothing to do
+        }
+
         int n = x.size() - 1;
         vec a;
 

@@ -269,18 +269,18 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 }
 
 void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
-{   
+{
     using namespace ttvst::helps;
     using namespace ttvst::splines;
     juce::ScopedNoDenormals _;
     juce::MidiBuffer midiThisBlock = midiMessages;
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
-    
+
     // Capture MIDI for the UI
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition);
-    
+
     buffer.clear();
     offsets_ = {};
     values_ = {};
@@ -295,124 +295,108 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const int outN = buffer.getNumSamples();
     if (srcN <= 0) return;
 
-    if (haveLastMidi_) {
-        DBG("BUFFER START. haveLastMidi: true");
+    if (hasPitchWheelMessage(lastMidi_)) {
+        DBG("proessBlock: lastMIDI has msgs");
     }
     else {
-        DBG("BUFFER START. haveLastMidi: false");
+        DBG("processBlock: lastMIDI no msgs");
     }
-    
+
 
     //IF HOST RESIZES BUFFER THEN DROP LAST BLOCK AND UPDATE LAST BLOCK SIZE
-    if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN){
+    if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN) {
         lastBlock_.setSize(outCh, outN, false, true, true);
         DBG("block resized");
         haveLastMidi_ = false;
     }
 
-    //set after render message (after offset is message_ofset + outN)
-    if (auto first = getFirstPitchWheelMessage(midiMessages)) {
-        afterRenderOffset = first->samplePosition;
-        afterRenderValue = first->getMessage().getPitchWheelValue();
-    }
-    else{
-        afterRenderOffset.reset();
-        afterRenderOffset.reset();
-        DBG("no after render to push");
-    }
-
-    //push last midi messages
-    if (haveLastMidi_) {
-        auto optOff = getPitchWheelOffsetsVector(lastMidi_);
-        auto optVal = getPitchWheelValueVector(lastMidi_);
-        if (optOff && optVal) {
-            offsets_ = std::move(*optOff);
-            values_ = std::move(*optVal);
-        }
-    }
-
-    //push pre render messages (pre render offset is offset - outN and is negative)
-    /*if (preRenderOffset && preRenderValue) {
-        preRender = true;
-        offsets_.insert(offsets_.begin(), *preRenderOffset);
-        values_.insert(values_.begin(), *preRenderValue);
-        DBG("pre render msg pushed");
+    //get last midi
+    auto optOff = getPitchWheelOffsetsVector(lastMidi_);
+    auto optVal = getPitchWheelValueVector(lastMidi_);
+    if (optOff && optVal) {
+        //push last midi
+        offsets_ = std::move(*optOff);
+        values_ = std::move(*optVal);
+        DBG("processBlock: lastMIDI msgs PUSHED");
     }
     else {
-        preRender = false;
+        DBG("ProcessBlock: no msgs in LAST MIDI");
     }
-    */
-    if (afterRenderOffset && afterRenderValue) {
-        offsets_.push_back(*afterRenderOffset + outN);
-        values_.push_back(*afterRenderValue);
-        afterRender = true;
-        DBG("after render msg pushed");
+
+    if (preRenderOffset && preRenderValue) {
+        offsets_.insert(offsets_.begin(), *preRenderOffset);
+        values_.insert(values_.begin(), *preRenderValue);
+        DBG("processBlock: PRE render msg PUSHED");
     }
-    for (double offset : offsets_) {
-        afterRender = false;
-        DBG("offset: " << offset);
+    else {
+        DBG("processBlock: no PRE render values to push");
     }
+
+    if (auto meta = getFirstPitchWheelMessage(midiMessages)) {
+        offsets_.push_back(meta->samplePosition + outN);
+        values_.push_back(meta->getMessage().getPitchWheelValue());
+        DBG("processBlock: AFTER render msg PUSHED");
+    }
+    else {
+        DBG("processBlock: no AFTER render values to push");
+    }
+
+    
+
 
 
     
-    if (!offsets_.empty() && !values_.empty()) {
+    if (offsets_.size() > 1) {
         vector<splineSet> splineSet = spline(offsets_, values_);
-        vector<double> Y = createPositionVector(splineSet, offsets_, values_, outN, preRender, afterRender);
-        if (!Y.empty()) {
-            preRenderValue = Y.back();
-            preRenderOffset = -1;
-            preRender = true;
-        }
-        else {
-            preRenderValue.reset();
-            preRenderValue.reset();
-            preRender = false;
-        }
-        DBG("vector creation executed");
+        
+        vector<double> Y = createPositionVector(splineSet, offsets_, values_, outN);  
+        
+        DBG("processBlock: vector creation executed");
         //save_vector_csv("dblVec.csv", Y, 12);
         if (!Y.empty()) {
-            append_vector_csv("longVector15.csv", Y, 12);
-            DBG("appended vector of length: " << Y.size());
+            //sets proper prerender if the generated vector is not empty
+            preRenderValue = Y.back();
+            preRenderOffset = -1;
+            DBG("processBlock: pre render values assigned from vector");
+            append_vector_csv("longVector25.csv", Y, 12);
+            DBG("processBlock: appended vector of length: " << Y.size());
         }
         else {
-            DBG("position vector is empty");
+            DBG("processBlock: position vector is empty?");
+            preRenderValue.reset();
+            preRenderValue.reset();
         }
     }
     else {
-        DBG("no messages to create vector from");
+        DBG("processBlock: no messages to create vector from");
+        preRenderValue.reset();
+        preRenderValue.reset();
+        DBG("processBlock: pre render values reset");
     }
 
-    //put last message in memory
-    if (haveLastMidi_ && !preRenderValue.has_value()) {
+
+    if (!preRenderValue.has_value() || !preRenderOffset.has_value()) {
         if (auto meta = getLastPitchWheelMessage(lastMidi_)) {
-            meta = getLastPitchWheelMessage(lastMidi_);
-            preRenderOffset = meta->samplePosition; 
+            preRenderOffset = meta->samplePosition - outN; 
             preRenderValue = meta->getMessage().getPitchWheelValue();
-            DBG("pre render data updated");
+            DBG("first iteration pre render msg saved");
         }
         else {
             DBG("no pitch wheel message in last midi");
-            preRenderOffset.reset();
-            preRenderOffset.reset();
         }
     }
-    else {
-        DBG("no last midi");
-    }
+    
 
     offsets_.clear();
     values_.clear();
     afterRenderOffset.reset();
     afterRenderValue.reset();
+    
     if (hasPitchWheelMessage(midiMessages)) {
         lastMidi_.swapWith(midiMessages);
-        haveLastMidi_ = true;
     }
     else {
-        haveLastMidi_ = false;
         lastMidi_.clear();
-        preRenderOffset.reset();
-        preRenderValue.reset();
     }
 
 }

@@ -37,49 +37,29 @@ namespace ttvst::splines {
         double x;
     };
 
-    vector<double> createPositionVector(vector<splineSet> cs, vec x, vec y, int outN, bool prerender, bool afterrender) {
+    vector<double> createPositionVector(vector<splineSet> cs, vec x, vec y, int outN) {
         // must have at least two points and same length
         if (x.size() <= 1 || y.size() <= 1 || x.size() != y.size()) {
             return {}; // empty result: nothing to do
+            DBG("splines: vectors empty or invalid");
         }
-        if (!prerender || !afterrender) {
-            return {};
-        }
+
         vec pos;
-        //iterate through splines
         for (int i = 0; i < x.size() - 1; i++) {
-            int spl_end;
-            auto spl = cs[i];
-            int ts = cs[i].x;
-            if (cs[i].x < 0) {
-                ts = 0;
+            splineSet spl = cs[i];
+            int seg_start = x[i];
+            int seg_end = x[i+1];
+            if (seg_end > outN)
+                seg_end = outN;
+            for (int t = seg_start; t < seg_end; t++) {
+                int xj = t - spl.x;
+                pos.push_back(spl.a + spl.b * xj + spl.c * pow(xj, 2) + spl.d * pow(xj, 3));
             }
-            if (x[i + 1] > outN) {
-                spl_end = outN;
-            }
-            else {
-                spl_end = x[i + 1];
-            }
-
-            //append position values from the spline start to the next spline start
-            for (int t = ts; t < spl_end; t++) {
-                int ti = t - spl.x;
-                pos.push_back(spl.a + spl.b * ti + spl.c * pow(ti, 2) + spl.d * pow(ti, 3));
-            }
-
+            
         }
-        /*
-        if (prerender) {
-            pos.erase(pos.begin(), pos.begin() + x[0]);
+        if (x[0] < 0) {
+            pos.erase(pos.begin(), pos.begin() + std::abs(x[0]));
         }
-        if (afterrender) {
-            pos.resize((pos.size() - (outN - x[x.size() - 1])));
-        }
-        DBG("position vector size: " << pos.size());
-        */
-        
-
-
 
         return pos;
     }

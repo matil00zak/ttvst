@@ -31,4 +31,11 @@ namespace ttvst::helps
 
     bool hasPitchWheelMessage(const juce::MidiBuffer& buffer);
 
+    std::vector<double> pitchWheelToSamplePositionVec(const std::vector<double>);
+
+    double pitchWheelToSamplePosition(const double);
+
+    std::vector<double> createRatiosVector(std::vector<double> Y, std::optional<double> preRenderValue);
+
+
 } // namespace ttvst::midi

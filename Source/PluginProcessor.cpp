@@ -193,8 +193,8 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
     hostSampleRate_ = sampleRate;
-    playhead_ = 0; // reset on (re)start
-    playheadReversed_ = 0;
+    playhead_ = 0.0; // reset on (re)start
+    //playheadReversed_ = 0;
     setLatencySamples(samplesPerBlock);
     
 }
@@ -284,6 +284,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     buffer.clear();
     offsets_ = {};
     values_ = {};
+    ratios_ = {};
 
     //Snapshot loaded data
     auto data = getLoaded();
@@ -315,8 +316,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     auto optVal = getPitchWheelValueVector(lastMidi_);
     if (optOff && optVal) {
         //push last midi
+        
         offsets_ = std::move(*optOff);
-        values_ = std::move(*optVal);
+
+        std::vector<double >values = pitchWheelToSamplePositionVec(*optVal);
+        values_ = std::move(values);
         DBG("processBlock: lastMIDI msgs PUSHED");
     }
     else {
@@ -334,7 +338,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     if (auto meta = getFirstPitchWheelMessage(midiMessages)) {
         offsets_.push_back(meta->samplePosition + outN);
-        values_.push_back(meta->getMessage().getPitchWheelValue());
+        double value = meta->getMessage().getPitchWheelValue();
+        value = pitchWheelToSamplePosition(value);
+        values_.push_back(value);
         DBG("processBlock: AFTER render msg PUSHED");
     }
     else {
@@ -347,18 +353,29 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     
     if (offsets_.size() > 1) {
+
+        
+        for (double val : values_) {
+            DBG(val);
+        }
         vector<splineSet> splineSet = spline(offsets_, values_);
-        
+        DBG("spline set ok");
         vector<double> Y = createPositionVector(splineSet, offsets_, values_, outN);  
-        
+        DBG("pos vector ok " << Y.size());
+        vector<double> ratios = createRatiosVector(Y, preRenderValue);
+        DBG("ratios size: " << ratios.size());
+        ratios_ = ratios;
         DBG("processBlock: vector creation executed");
         //save_vector_csv("dblVec.csv", Y, 12);
         if (!Y.empty()) {
             //sets proper prerender if the generated vector is not empty
             preRenderValue = Y.back();
+            DBG("prerendervalue: " << *preRenderValue);
             preRenderOffset = -1;
+            //Y = pitchWheelToSamplePositionVec(Y);
             DBG("processBlock: pre render values assigned from vector");
-            append_vector_csv("longVector25.csv", Y, 12);
+            //append_vector_csv("R2.csv", ratios, 12);
+            //append_vector_csv("P2.csv", Y, 12);
             DBG("processBlock: appended vector of length: " << Y.size());
         }
         else {
@@ -375,10 +392,43 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
 
 
+    if (ratios_.size() == outN) {
+        for (int i = 0; i < outN; i++) {
+            auto index0 = (unsigned long)playhead_;
+            auto index1 = index0 == (srcN - 1) ? (unsigned int)0 : index0 + 1;
+            auto frac = playhead_ - (double)index0;
+            for (int ch = 0; ch < outCh; ch++) {
+                auto value0 = *data->buffer.getReadPointer(ch, index0);
+                auto value1 = *data->buffer.getReadPointer(ch, index1);
+                auto currentSample = value0 + frac * (value1 - value0);
+                buffer.setSample(ch, i, (float)currentSample);
+            }
+            playhead_ += ratios_[i];
+        }
+    }
+    else {
+        for (int i = 0; i < outN; i++) {
+            auto index0 = (unsigned long)playhead_;
+            for (int ch = 0; ch < outCh; ch++) {
+                float value = *data->buffer.getReadPointer(0, index0);
+                buffer.setSample(ch, i, value);
+            }
+            playhead_ += 1;
+        }
+    }
+    
+    
+
+
+
+
+
     if (!preRenderValue.has_value() || !preRenderOffset.has_value()) {
         if (auto meta = getLastPitchWheelMessage(lastMidi_)) {
             preRenderOffset = meta->samplePosition - outN; 
-            preRenderValue = meta->getMessage().getPitchWheelValue();
+            double value = meta->getMessage().getPitchWheelValue();
+            preRenderValue = pitchWheelToSamplePosition(value);
+            
             DBG("first iteration pre render msg saved");
         }
         else {

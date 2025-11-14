@@ -9,6 +9,7 @@
 */
 
 #include "helpers.h"
+#include <algorithm>
 
 namespace ttvst::helps {
 
@@ -111,6 +112,44 @@ namespace ttvst::helps {
         }
         return false;
     }
+
+    std::vector<double> pitchWheelToSamplePositionVec(std::vector<double> values) {
+        if (!values.empty()) {
+            std::for_each(values.begin(), values.end(), [](double& n) {
+                n = (n / 16383.0) * 2.0 * 48000.0;
+                });
+            return values;
+        }
+        else {
+            DBG("pitchToSample: values are empty");
+        }
+
+    }
+
+    double pitchWheelToSamplePosition(const double value) {
+        return (value / 16383.0) * 2.0 * 48000.0;
+    }
+
+    std::vector<double> createRatiosVector(std::vector<double> Y, std::optional<double> preRenderValue) {
+        if (Y.size() < 2) {
+            return {};
+        }
+        std::vector<double> ratios;
+        ratios.reserve(Y.size());
+
+        if (preRenderValue.has_value()) {
+            ratios.push_back(Y[0] - *preRenderValue);
+        }
+
+
+        for (int i = 0; i + 1 < Y.size(); i++) {
+            ratios.push_back(Y[i + 1] - Y[i]);
+        }
+        return ratios;
+
+
+    }
+
 
 }
 

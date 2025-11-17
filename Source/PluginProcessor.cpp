@@ -21,7 +21,11 @@ using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<Loade
 struct Seg { int offset = 0; int value  = 0; };
 
 
-
+void PluginTestowy2AudioProcessor::setMotorState(bool state) {
+    motorState = state;
+    int s = state == true ? 1 : 0;
+    DBG("state changed to: " << s );
+}
 
 int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
     const int delta = end - start;                 // can be negative
@@ -194,9 +198,10 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     // initialisation that you need..
     hostSampleRate_ = sampleRate;
     playhead_ = 0.0; // reset on (re)start
+    motorState = false;
     //playheadReversed_ = 0;
     setLatencySamples(samplesPerBlock);
-    
+
 }
 
 void PluginTestowy2AudioProcessor::releaseResources()

@@ -36,6 +36,8 @@ public:
     std::shared_ptr<const LoadedAudio> getLoadedReversed() const noexcept;
     void beginLoadFile(const juce::File& file);
     int getDeltaPh(int endVal, int startVal, int hostSr);
+    void setMotorState(bool state);
+
     int renderSeg(LoadedAudioPtr srcAudio,
         juce::AudioSampleBuffer outBuffer,
         juce::LagrangeInterpolator interp,
@@ -92,7 +94,10 @@ private:
     //int64_t playhead_ = 0;
     //int64_t playheadReversed_ = 0;// current read position in source samples
     double playhead_ = 0;
-
+    double I_sim = 0.0;
+    double I_ext = 0.0;
+    double beta = 0.0;
+    bool motorState = false;
     bool loop_ = true;
     bool afterRender = false;
     bool preRender = false;

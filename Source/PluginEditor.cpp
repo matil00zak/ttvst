@@ -44,6 +44,11 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
         midiMonitor.clear();
         };
 
+    addAndMakeVisible(motorStateButton);
+    motorStateButton.onClick = [this]() {
+       audioProcessor.setMotorState(motorStateButton.getToggleState());
+    };
+
     // MIDI monitor setup
     midiMonitor.setMultiLine(true);
     midiMonitor.setReadOnly(true);
@@ -56,7 +61,7 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
 
 
 
-    setSize (400, 300);
+    setSize (500, 400);
 }
 
 PluginTestowy2AudioProcessorEditor::~PluginTestowy2AudioProcessorEditor()
@@ -80,12 +85,14 @@ void PluginTestowy2AudioProcessorEditor::resized()
 {
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
-    loadButton.setBounds(getLocalBounds().reduced(20));
-    clearLogButton.setBounds(getLocalBounds().reduced(20));
+    //loadButton.setBounds(getLocalBounds().reduced(20));
+    //clearLogButton.setBounds(getLocalBounds().reduced(20));
+    //motorStateButton.setBounds(getLocalBounds().reduced(20));
     auto area = getLocalBounds().reduced(8);
     auto top = area.removeFromTop(36);
     loadButton.setBounds(top.removeFromLeft(140));
     clearLogButton.setBounds(top.removeFromLeft(280));
+    motorStateButton.setBounds(top.removeFromLeft(420));
     area.removeFromTop(8);
     midiMonitor.setBounds(area);
 

@@ -32,6 +32,7 @@ private:
     PluginTestowy2AudioProcessor& audioProcessor;
     juce::TextButton loadButton{ "Load File" };
     juce::TextButton clearLogButton{ "Clear Logs" };
+    juce::ToggleButton motorStateButton{ "engine start" };
     juce::TextEditor midiMonitor;
     // Keep only a fixed number of recent lines to avoid UI slowdown
     juce::StringArray midiLines;

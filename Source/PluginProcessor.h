@@ -15,6 +15,7 @@
 #include "LoadedAudio.h"
 #include "MidiMessageManager.h"
 #include "helpers.h"
+#include "cubicSplines.h"
 
 //==============================================================================
 /**

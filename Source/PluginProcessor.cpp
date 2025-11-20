@@ -358,11 +358,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         for (double val : values_) {
             DBG(val);
         }
-        vector<splineSet> splineSet = spline(offsets_, values_);
+        std::vector<splineSet> splineSet = spline(offsets_, values_);
         DBG("spline set ok");
-        vector<double> Y = createPositionVector(splineSet, offsets_, values_, outN);  
+        std::vector<double> Y = createPositionVector(splineSet, offsets_, values_, outN);  
         DBG("pos vector ok " << Y.size());
-        vector<double> ratios = createRatiosVector(Y, preRenderValue);
+        std::vector<double> ratios = createRatiosVector(Y, preRenderValue);
         DBG("ratios size: " << ratios.size());
         ratios_ = ratios;
         DBG("processBlock: vector creation executed");

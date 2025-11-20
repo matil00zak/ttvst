@@ -5,6 +5,8 @@
   <MAINGROUP id="lgQ1Au" name="PluginTestowy2">
     <GROUP id="{99ED1F21-A7C9-0CD2-C1AA-5FDA53FCEF49}" name="Source">
       <GROUP id="{05B79315-1829-C362-7AA7-78929EE30333}" name="helpers">
+        <FILE id="JhLz9Q" name="cubicSplines.cpp" compile="1" resource="0"
+              file="Source/cubicSplines.cpp"/>
         <FILE id="hvBzZ7" name="cubicSplines.h" compile="0" resource="0" file="Source/cubicSplines.h"/>
         <FILE id="LbF3EM" name="helpers.cpp" compile="1" resource="0" file="Source/helpers.cpp"/>
         <FILE id="t0jglc" name="helpers.h" compile="0" resource="0" file="Source/helpers.h"/>

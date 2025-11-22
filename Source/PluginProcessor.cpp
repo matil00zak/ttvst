@@ -311,84 +311,64 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         haveLastMidi_ = false;
     }
 
-    //get last midi
-    auto optOff = getPitchWheelOffsetsVector(lastMidi_);
-    auto optVal = getPitchWheelValueVector(lastMidi_);
+    //get midi
+    auto optOff = getPitchWheelOffsetsVector(midiMessages);
+    auto optVal = getPitchWheelValueVector(midiMessages);
     if (optOff && optVal) {
-        //push last midi
-        
-        offsets_ = std::move(*optOff);
-
+        auto ofs = optOff.value();
+        std::transform(ofs.begin(), ofs.end(), ofs.begin(), [outN](float val) { return val + outN; });
         std::vector<double >values = pitchWheelToSamplePositionVec(*optVal);
-        values_ = std::move(values);
-        DBG("processBlock: lastMIDI msgs PUSHED");
+        afterRenderOffsetVec = ofs;
+        afterRenderValueVec = values;
     }
     else {
-        DBG("ProcessBlock: no msgs in LAST MIDI");
-    }
-
-    if (preRenderOffset && preRenderValue) {
-        offsets_.insert(offsets_.begin(), *preRenderOffset);
-        values_.insert(values_.begin(), *preRenderValue);
-        DBG("processBlock: PRE render msg PUSHED");
-    }
-    else {
-        DBG("processBlock: no PRE render values to push");
-    }
-
-    if (auto meta = getFirstPitchWheelMessage(midiMessages)) {
-        offsets_.push_back(meta->samplePosition + outN);
-        double value = meta->getMessage().getPitchWheelValue();
-        value = pitchWheelToSamplePosition(value);
-        values_.push_back(value);
-        DBG("processBlock: AFTER render msg PUSHED");
-    }
-    else {
-        DBG("processBlock: no AFTER render values to push");
+        afterRenderOffsetVec = {};
+        afterRenderValueVec = {};
     }
 
     
 
+    offsets_.insert(offsets_.end(), preRenderOffsetVec.begin(), preRenderOffsetVec.end());
+    offsets_.insert(offsets_.end(), thisOffsetVec.begin(), thisOffsetVec.end());
+    offsets_.insert(offsets_.end(), afterRenderOffsetVec.begin(), afterRenderOffsetVec.end());
+
+    values_.insert(values_.end(), preRenderValueVec.begin(), preRenderValueVec.end());
+    values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
+    values_.insert(values_.end(), afterRenderValueVec.begin(), afterRenderValueVec.end());
 
 
+    for (auto of : values_) {
+        DBG(of);
+    }
     
-    if (offsets_.size() > 1) {
+    if (thisOffsetVec.size() > 1) {
 
-        
-        for (double val : values_) {
-            DBG(val);
+        splineSet_ = spline(offsets_, values_);
+        if (!preRenderOffsetVec.empty()) {
+            splineSet_.erase(splineSet_.begin(), splineSet_.end() - afterRenderOffsetVec.size());
+            splineSet_.insert(splineSet_.begin(), lastSplines.begin(), lastSplines.end());
         }
-        std::vector<splineSet> splineSet = spline(offsets_, values_);
+        lastSplines = splineSet_;
+
         DBG("spline set ok");
-        std::vector<double> Y = createPositionVector(splineSet, offsets_, values_, outN);  
+        std::vector<double> Y = createPositionVector(splineSet_, offsets_, values_, outN);  
         DBG("pos vector ok " << Y.size());
         std::vector<double> ratios = createRatiosVector(Y, preRenderValue);
         DBG("ratios size: " << ratios.size());
         ratios_ = ratios;
         DBG("processBlock: vector creation executed");
-        //save_vector_csv("dblVec.csv", Y, 12);
         if (!Y.empty()) {
-            //sets proper prerender if the generated vector is not empty
-            preRenderValue = Y.back();
-            DBG("prerendervalue: " << *preRenderValue);
-            preRenderOffset = -1;
-            //Y = pitchWheelToSamplePositionVec(Y);
-            DBG("processBlock: pre render values assigned from vector");
-            //append_vector_csv("R2.csv", ratios, 12);
-            //append_vector_csv("P2.csv", Y, 12);
+            append_vector_csv("pos_6767.csv", Y, 12);
             DBG("processBlock: appended vector of length: " << Y.size());
         }
         else {
-            DBG("processBlock: position vector is empty?");
-            preRenderValue.reset();
-            preRenderValue.reset();
+            DBG("processBlock: position vector is empty");
         }
     }
     else {
         DBG("processBlock: no messages to create vector from");
-        preRenderValue.reset();
-        preRenderValue.reset();
         DBG("processBlock: pre render values reset");
+        splineSet_ = {};
     }
 
 
@@ -416,31 +396,23 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             playhead_ += 1;
         }
     }
+
+
+
+    std::transform(afterRenderOffsetVec.begin(), afterRenderOffsetVec.end(), afterRenderOffsetVec.begin(),
+        [outN](float val) { return val - outN; });
     
-    
+    std::transform(thisOffsetVec.begin(), thisOffsetVec.end(), thisOffsetVec.begin(),
+        [outN](float val) { return val - outN; });
+
+    //lastSplines = splineSet_;
+    preRenderValueVec = thisValueVec;
+    preRenderOffsetVec = thisOffsetVec;
+
+    thisValueVec = afterRenderValueVec;
+    thisOffsetVec = afterRenderOffsetVec;
 
 
-
-
-
-    if (!preRenderValue.has_value() || !preRenderOffset.has_value()) {
-        if (auto meta = getLastPitchWheelMessage(lastMidi_)) {
-            preRenderOffset = meta->samplePosition - outN; 
-            double value = meta->getMessage().getPitchWheelValue();
-            preRenderValue = pitchWheelToSamplePosition(value);
-            
-            DBG("first iteration pre render msg saved");
-        }
-        else {
-            DBG("no pitch wheel message in last midi");
-        }
-    }
-    
-
-    offsets_.clear();
-    values_.clear();
-    afterRenderOffset.reset();
-    afterRenderValue.reset();
     
     if (hasPitchWheelMessage(midiMessages)) {
         lastMidi_.swapWith(midiMessages);

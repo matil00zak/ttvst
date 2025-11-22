@@ -93,7 +93,9 @@ private:
     //int64_t playhead_ = 0;
     //int64_t playheadReversed_ = 0;// current read position in source samples
     double playhead_ = 0;
-
+    std::vector<double> thisValueVec, afterRenderValueVec, preRenderValueVec;
+    std::vector<double> thisOffsetVec, afterRenderOffsetVec, preRenderOffsetVec;
+    std::vector<ttvst::splines::splineSet> lastSplines, splineSet_;
     bool loop_ = true;
     bool afterRender = false;
     bool preRender = false;

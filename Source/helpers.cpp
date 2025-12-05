@@ -130,6 +130,7 @@ namespace ttvst::helps {
         return (value / 16383.0) * 2.0 * 48000.0;
     }
 
+    //old version
     std::vector<double> createRatiosVector(std::vector<double> Y, std::optional<double> preRenderValue) {
         if (Y.size() < 2) {
             return {};
@@ -150,6 +151,29 @@ namespace ttvst::helps {
 
     }
 
+
+    
+    vectorPairDbl positionsToSpeed(std::vector<double> values, std::vector<double> offsets, int outN) {
+        //this should only return a vector if input vectors have messages from two neighbouring buffers
+        std::vector<double> speeds;
+        std::vector<double> speed_offsets;
+        double last_offset = 0;
+        if (offsets.size() > 1) {
+            for (int i = 0; i < offsets.size() - 1; i++) {
+                if (offsets[i + 1] > 0 && offsets[i] < outN) {
+                    double delta_t = offsets[i + 1] - offsets[i];
+                    double delta_pos = values[i + 1] - values[i];
+                    double speed = delta_pos / delta_t;
+                    speed_offsets.push_back(offsets[i + 1]);
+                    speeds.push_back(speed);
+                }
+            }
+        }
+        else {
+            return { {}, {} };
+        }
+        return { speeds, speed_offsets };
+    }
 
 }
 

@@ -18,6 +18,7 @@ namespace ttvst::helps
 {   
     using intPair = std::pair<int, int>;
     using pairVector = std::vector<intPair>;
+    using vectorPairDbl = std::pair<std::vector<double>, std::vector<double>>;
 
     std::optional<juce::MidiMessageMetadata> getLastPitchWheelMessage(const juce::MidiBuffer& buffer);
 
@@ -36,6 +37,11 @@ namespace ttvst::helps
     double pitchWheelToSamplePosition(const double);
 
     std::vector<double> createRatiosVector(std::vector<double> Y, std::optional<double> preRenderValue);
+
+
+    // this function generates vectors with one message from the lookahead buffer
+    // is meant to be used with last generated spline to complete the current buffer on its beggining
+    vectorPairDbl positionsToSpeed(std::vector<double> positions, std::vector<double> offsets, int outN);
 
 
 } // namespace ttvst::midi

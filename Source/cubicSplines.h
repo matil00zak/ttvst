@@ -29,6 +29,8 @@ namespace ttvst::splines {
 
     std::vector<double> createPositionVector(std::vector<splineSet> cs, vec x, vec y, int outN);
 
+    std::vector<double> createSpeedVector(std::vector<splineSet> cs, int outN);
+
 
     void save_vector_csv(const std::string& path,
         const std::vector<double>& v,

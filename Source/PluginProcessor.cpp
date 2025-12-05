@@ -285,6 +285,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     offsets_ = {};
     values_ = {};
     ratios_ = {};
+    speeds_ = {};
+    speed_offsets_ = {};
 
     //Snapshot loaded data
     auto data = getLoaded();
@@ -327,7 +329,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
 
     
-
+    // creating vectors for messages in index range: < - outN, outN > -- moving in out memory buffers
     offsets_.insert(offsets_.end(), preRenderOffsetVec.begin(), preRenderOffsetVec.end());
     offsets_.insert(offsets_.end(), thisOffsetVec.begin(), thisOffsetVec.end());
     offsets_.insert(offsets_.end(), afterRenderOffsetVec.begin(), afterRenderOffsetVec.end());
@@ -336,39 +338,39 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
     values_.insert(values_.end(), afterRenderValueVec.begin(), afterRenderValueVec.end());
 
+    // getting desired messages from in out buffer
+    // version with calculating speed between messages, needed only one message from lookahead 
+    // also a last current-lookahead shared spline is needed to generate full buffer
 
-    for (auto of : values_) {
-        DBG(of);
+    ttvst::helps::vectorPairDbl speedinfo = positionsToSpeed(values_, offsets_, outN);
+    speeds_ = speedinfo.first;
+    speed_offsets_ = speedinfo.second;
+    for (auto ofs : speed_offsets_) {
+        DBG(ofs);
     }
-    
-    if (thisOffsetVec.size() > 1) {
 
-        splineSet_ = spline(offsets_, values_);
-        if (!preRenderOffsetVec.empty()) {
-            splineSet_.erase(splineSet_.begin(), splineSet_.end() - afterRenderOffsetVec.size());
-            splineSet_.insert(splineSet_.begin(), lastSplines.begin(), lastSplines.end());
-        }
-        lastSplines = splineSet_;
 
-        DBG("spline set ok");
-        std::vector<double> Y = createPositionVector(splineSet_, offsets_, values_, outN);  
-        DBG("pos vector ok " << Y.size());
-        std::vector<double> ratios = createRatiosVector(Y, preRenderValue);
-        DBG("ratios size: " << ratios.size());
-        ratios_ = ratios;
-        DBG("processBlock: vector creation executed");
-        if (!Y.empty()) {
-            append_vector_csv("pos_6767.csv", Y, 12);
-            DBG("processBlock: appended vector of length: " << Y.size());
+    if (speeds_.size() > 1) {
+
+        splineSet_ = spline(speed_offsets_, speeds_);
+
+        if (lastSpline.x < 0) {
+            splineSet_.insert(splineSet_.begin(), lastSpline);
         }
-        else {
-            DBG("processBlock: position vector is empty");
-        }
+
+        lastSpline = splineSet_.back();
+        lastSpline.x = lastSpline.x - outN;
+
+        ratios_ = createSpeedVector(splineSet_, outN);
+        DBG("ratios size: " << ratios_.size());
+        append_vector_csv("ratios_grudzien.csv", ratios_, 12);
     }
     else {
         DBG("processBlock: no messages to create vector from");
         DBG("processBlock: pre render values reset");
         splineSet_ = {};
+        lastSpline = {};
+        ratios_ = {};
     }
 
 
@@ -398,22 +400,22 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
 
 
-
+    
+    // preparing the message vectors for the next buffer and update, so when it comes everything is in the desired range
+    // relative 0 at the middle buffer start
     std::transform(afterRenderOffsetVec.begin(), afterRenderOffsetVec.end(), afterRenderOffsetVec.begin(),
         [outN](float val) { return val - outN; });
     
     std::transform(thisOffsetVec.begin(), thisOffsetVec.end(), thisOffsetVec.begin(),
         [outN](float val) { return val - outN; });
 
-    //lastSplines = splineSet_;
+
     preRenderValueVec = thisValueVec;
     preRenderOffsetVec = thisOffsetVec;
-
     thisValueVec = afterRenderValueVec;
     thisOffsetVec = afterRenderOffsetVec;
 
 
-    
     if (hasPitchWheelMessage(midiMessages)) {
         lastMidi_.swapWith(midiMessages);
     }

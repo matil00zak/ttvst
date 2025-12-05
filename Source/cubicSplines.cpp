@@ -21,6 +21,28 @@
 
 namespace ttvst::splines {
 
+    std::vector<double> createSpeedVector(std::vector<splineSet> cs, int outN) {
+        vec ratio;
+        for (int i = 0; i < cs.size() - 1; i++) {
+            splineSet spl = cs[i];
+            int seg_start = spl.x;
+            int seg_end = cs[i + 1].x;
+            for (int t = seg_start; t < seg_end; t++) {
+                int xj = t - spl.x;
+                ratio.push_back(spl.a + spl.b * xj + spl.c * pow(xj, 2) + spl.d * pow(xj, 3));
+            }
+        }
+        splineSet last = cs.back();
+        int last_t = last.x;
+        for (int t = last_t; t < outN; t++) {
+            int xj = t - last.x;
+            ratio.push_back(last.a + last.b * xj + last.c * pow(xj, 2) + last.d * pow(xj, 3));
+        }
+        if (cs[0].x < 0) {
+            ratio.erase(ratio.begin(), ratio.begin() + std::abs(cs[0].x));
+        }
+        return ratio;
+    }
 
 
     std::vector<double> createPositionVector(std::vector<splineSet> cs, vec x, vec y, int outN) {

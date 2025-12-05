@@ -87,7 +87,7 @@ private:
     ttvst::MidiMessageManager midiLog_;
     std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
     std::optional<double> lastValue, afterRenderValue, preRenderValue;
-    std::vector<double> offsets_, values_, ratios_;
+    std::vector<double> offsets_, values_, speeds_, speed_offsets_, ratios_;
     enum block { pre, render, after };
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay
     //int64_t playhead_ = 0;
@@ -96,6 +96,8 @@ private:
     std::vector<double> thisValueVec, afterRenderValueVec, preRenderValueVec;
     std::vector<double> thisOffsetVec, afterRenderOffsetVec, preRenderOffsetVec;
     std::vector<ttvst::splines::splineSet> lastSplines, splineSet_;
+    ttvst::splines::splineSet lastSpline;
+    std::vector<double> lastYFront;
     bool loop_ = true;
     bool afterRender = false;
     bool preRender = false;

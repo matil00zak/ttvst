@@ -88,6 +88,7 @@ private:
     std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
     std::optional<double> lastValue, afterRenderValue, preRenderValue;
     std::vector<double> offsets_, values_, speeds_, speed_offsets_, ratios_;
+    
     enum block { pre, render, after };
     double hostSampleRate_ = 44100.0;  // set in prepareToPlay
     //int64_t playhead_ = 0;
@@ -97,6 +98,9 @@ private:
     std::vector<double> thisOffsetVec, afterRenderOffsetVec, preRenderOffsetVec;
     std::vector<ttvst::splines::splineSet> lastSplines, splineSet_;
     ttvst::splines::splineSet lastSpline;
+    ttvst::splines::splineSetPlus splinesPlus;
+    std::optional<ttvst::splines::splineCondition> splineCondition_;
+    std::optional<ttvst::helps::velocity_in_out> velocity_in_out_;
     std::vector<double> lastYFront;
     bool loop_ = true;
     bool afterRender = false;

@@ -287,6 +287,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     ratios_ = {};
     speeds_ = {};
     speed_offsets_ = {};
+    splineCondition_.reset();
 
     //Snapshot loaded data
     auto data = getLoaded();
@@ -328,8 +329,10 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         afterRenderValueVec = {};
     }
 
+    //velocity_in_out_ = appendVelocityInOut(velocity_in_out_, afterRenderOffsetVec, afterRenderValueVec);
+
     
-    // creating vectors for messages in index range: < - outN, outN > -- moving in out memory buffers
+    // creating vectors for messages in index range: < - outN, 2 x outN > -- moving in out memory buffers
     offsets_.insert(offsets_.end(), preRenderOffsetVec.begin(), preRenderOffsetVec.end());
     offsets_.insert(offsets_.end(), thisOffsetVec.begin(), thisOffsetVec.end());
     offsets_.insert(offsets_.end(), afterRenderOffsetVec.begin(), afterRenderOffsetVec.end());
@@ -345,25 +348,40 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     ttvst::helps::vectorPairDbl speedinfo = positionsToSpeed(values_, offsets_, outN);
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
+    speed_offsets_.erase(speed_offsets_.begin(), speed_offsets_.begin() + preRenderOffsetVec.size() - 1);
     for (auto ofs : speed_offsets_) {
         DBG(ofs);
     }
 
-
-    if (speeds_.size() > 1) {
-
-        splineSet_ = spline(speed_offsets_, speeds_);
-
-        if (lastSpline.x < 0) {
-            splineSet_.insert(splineSet_.begin(), lastSpline);
-        }
-
-        lastSpline = splineSet_.back();
+    
+    bool combo = (
+        preRenderOffsetVec.size() != 0 &&
+        thisOffsetVec.size() != 0 &&
+        afterRenderOffsetVec.size() != 0);
+    
+    if (combo) {
+        speed_offsets_.erase(speed_offsets_.begin(), speed_offsets_.begin() + preRenderOffsetVec.size() - 1);
+        //generate spline set. this spline set needs the spline generated from last iteration to generate continuous output
+        //the generated spline set should be compatible with the saved spline
+        int knotIdx = speeds_.size() - afterRenderOffsetVec.size();
+        splinesPlus = splineSpecial(speed_offsets_, speeds_, splineCondition_, knotIdx);
+        DBG("generated splinesPlus");
+        splineSet_ = splinesPlus.set;
+        DBG("set splineSet_");
+        //prep for render - complete spline set
+        splineSet_.insert(splineSet_.begin(), lastSpline);
+        DBG("inserted");
+        //prep for next iteration
+        int splineIdx = splinesPlus.set.size() - afterRenderOffsetVec.size();
+        lastSpline = splinesPlus.set[splineIdx];
+        DBG("lastSpline set");
         lastSpline.x = lastSpline.x - outN;
+        splineCondition_ = splinesPlus.spline_condition;
+        DBG("spline Condition updated");
 
         ratios_ = createSpeedVector(splineSet_, outN);
         DBG("ratios size: " << ratios_.size());
-        append_vector_csv("ratios_grudzien.csv", ratios_, 12);
+        append_vector_csv("ratios_12_15.csv", ratios_, 12);
     }
     else {
         DBG("processBlock: no messages to create vector from");
@@ -371,6 +389,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         splineSet_ = {};
         lastSpline = {};
         ratios_ = {};
+        splineCondition_.reset();
+
+    
     }
 
 

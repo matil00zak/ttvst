@@ -124,6 +124,8 @@ namespace ttvst::splines {
             return {}; // empty result: nothing to do
         }
 
+        
+
         int n = x.size() - 1;
         vec a;
 
@@ -177,4 +179,86 @@ namespace ttvst::splines {
         }
         return output_set;
     }
+
+
+    splineSetPlus splineSpecial(vec& x, vec& y, std::optional<splineCondition> lastSplineCondition, int newCondIdx) {
+        // must have at least two points and same length
+        if (x.size() <= 1 || y.size() <= 1 || x.size() != y.size()) {
+            return {}; // empty result: nothing to do
+        }
+        splineCondition thisSplineCondition;
+        if (lastSplineCondition.has_value()) {
+            thisSplineCondition = *lastSplineCondition;
+        }
+        else {
+            thisSplineCondition.alpha = 0;
+            thisSplineCondition.l = 1;
+            thisSplineCondition.mu = 0;
+            thisSplineCondition.z = 0;
+        }
+
+        
+
+
+        int n = x.size() - 1;
+        vec a;
+
+        a.insert(a.begin(), y.begin(), y.end());
+        vec b(n);
+        vec d(n);
+        vec h;
+
+        for (int i = 0; i < n; ++i)
+            h.push_back(x[i + 1] - x[i]);
+
+        vec alpha;
+        alpha.push_back(thisSplineCondition.alpha);
+        for (int i = 1; i < n; ++i)
+            alpha.push_back(3 * (a[i + 1] - a[i]) / h[i] - 3 * (a[i] - a[i - 1]) / h[i - 1]);
+
+        vec c(n + 1);
+        vec l(n + 1);
+        vec mu(n + 1);
+        vec z(n + 1);
+        l[0] = thisSplineCondition.l;
+        mu[0] = thisSplineCondition.mu;
+        z[0] = thisSplineCondition.z;
+
+        for (int i = 1; i < n; ++i)
+        {
+            l[i] = 2 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
+            mu[i] = h[i] / l[i];
+            z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
+        }
+
+        l[n] = 1;
+        z[n] = 0;
+        c[n] = 0;
+
+        for (int j = n - 1; j >= 0; --j)
+        {
+            c[j] = z[j] - mu[j] * c[j + 1];
+            b[j] = (a[j + 1] - a[j]) / h[j] - h[j] * (c[j + 1] + 2 * c[j]) / 3;
+            d[j] = (c[j + 1] - c[j]) / 3 / h[j];
+        }
+
+        std::vector<splineSet> output_set(n);
+        for (int i = 0; i < n; ++i)
+        {
+            output_set[i].a = a[i];
+            output_set[i].b = b[i];
+            output_set[i].c = c[i];
+            output_set[i].d = d[i];
+            output_set[i].x = x[i];
+        }
+        splineCondition next_condition;
+        next_condition.alpha = alpha[newCondIdx];
+        next_condition.l = l[newCondIdx];
+        next_condition.mu = mu[newCondIdx];
+        next_condition.z = z[newCondIdx];
+
+        splineSetPlus output_setPlus = { output_set, next_condition };
+        return { output_setPlus };
+    }
+
 }

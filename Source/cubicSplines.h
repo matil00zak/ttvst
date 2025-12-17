@@ -11,6 +11,7 @@
 #pragma once
 #include<vector>
 #include <string>
+#include <optional>
 
 
 
@@ -25,6 +26,19 @@ namespace ttvst::splines {
         double c;
         double d;
         double x;
+    };
+    
+    struct splineCondition {
+        double alpha;
+        double l;
+        double mu;
+        double z;
+    };
+
+    struct splineSetPlus {
+        std::vector<splineSet> set;
+        splineCondition spline_condition;
+
     };
 
     std::vector<double> createPositionVector(std::vector<splineSet> cs, vec x, vec y, int outN);
@@ -42,4 +56,6 @@ namespace ttvst::splines {
 
 
     std::vector<splineSet> spline(vec& x, vec& y);
+
+    splineSetPlus splineSpecial(vec& x, vec& y, std::optional<splineCondition> spline_condition, int newCondIndex);
 }

@@ -160,19 +160,28 @@ namespace ttvst::helps {
         double last_offset = 0;
         if (offsets.size() > 1) {
             for (int i = 0; i < offsets.size() - 1; i++) {
-                if (offsets[i + 1] > 0 && offsets[i] < outN) {
                     double delta_t = offsets[i + 1] - offsets[i];
                     double delta_pos = values[i + 1] - values[i];
                     double speed = delta_pos / delta_t;
                     speed_offsets.push_back(offsets[i + 1]);
                     speeds.push_back(speed);
-                }
+                
             }
         }
         else {
             return { {}, {} };
         }
         return { speeds, speed_offsets };
+    }
+
+
+    velocity_in_out appendVelocityInOut(
+        std::optional<velocity_in_out> in_out_vel,
+        std::vector<double> new_offsets,
+        std::vector<double> new_values) {
+
+        return *in_out_vel;
+
     }
 
 }

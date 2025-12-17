@@ -152,20 +152,25 @@ namespace ttvst::helps {
     }
 
 
-    
-    vectorPairDbl positionsToSpeed(std::vector<double> values, std::vector<double> offsets, int outN) {
+    //creates pair of speeds and offsets from the full values and offsets pairs
+    //the pairs are only for the messages int THIS buffer and one lookahead message
+    //product of this function is supposed to be interpolated
+    //for the interpolation to cover the whole buffer, spline set needs inserting the last spline saved 
+    vectorPairDbl positionsToSpeed(std::vector<double> values, std::vector<double> offsets, int outN, int lookahead) {
         //this should only return a vector if input vectors have messages from two neighbouring buffers
         std::vector<double> speeds;
         std::vector<double> speed_offsets;
+        int next = 0;
         double last_offset = 0;
         if (offsets.size() > 1) {
             for (int i = 0; i < offsets.size() - 1; i++) {
-                if (offsets[i + 1] > 0 && offsets[i] < outN) {
+                if (offsets[i + 1] > 0 && next < lookahead) {
                     double delta_t = offsets[i + 1] - offsets[i];
                     double delta_pos = values[i + 1] - values[i];
                     double speed = delta_pos / delta_t;
                     speed_offsets.push_back(offsets[i + 1]);
                     speeds.push_back(speed);
+                    if (offsets[i + 1] > outN) { next += 1; };
                 }
             }
         }

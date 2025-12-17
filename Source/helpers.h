@@ -39,9 +39,13 @@ namespace ttvst::helps
     std::vector<double> createRatiosVector(std::vector<double> Y, std::optional<double> preRenderValue);
 
 
-    // this function generates vectors with one message from the lookahead buffer
+    //creates pair of speeds and offsets from the full values and offsets pairs
+    //the pairs are only for the messages int THIS buffer and one lookahead message
+    //product of this function is supposed to be interpolated
+    //for the interpolation to cover the whole buffer, spline set needs inserting the last
+    //spline saved from previous iteration 
     // is meant to be used with last generated spline to complete the current buffer on its beggining
-    vectorPairDbl positionsToSpeed(std::vector<double> positions, std::vector<double> offsets, int outN);
+    vectorPairDbl positionsToSpeed(std::vector<double> positions, std::vector<double> offsets, int outN, int lookahead);
 
 
 } // namespace ttvst::midi

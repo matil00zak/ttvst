@@ -96,6 +96,7 @@ private:
     std::vector<double> thisValueVec, afterRenderValueVec, preRenderValueVec;
     std::vector<double> thisOffsetVec, afterRenderOffsetVec, preRenderOffsetVec;
     std::vector<ttvst::splines::splineSet> lastSplines, splineSet_;
+    std::optional<ttvst::splines::splineCondition> splineCondition_;
     ttvst::splines::splineSet lastSpline;
     std::vector<double> lastYFront;
     bool loop_ = true;

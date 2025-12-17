@@ -342,7 +342,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     // version with calculating speed between messages, needed only one message from lookahead 
     // also a last current-lookahead shared spline is needed to generate full buffer
 
-    ttvst::helps::vectorPairDbl speedinfo = positionsToSpeed(values_, offsets_, outN);
+    ttvst::helps::vectorPairDbl speedinfo = positionsToSpeed(values_, offsets_, outN, 2);
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
     for (auto ofs : speed_offsets_) {
@@ -350,26 +350,32 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
 
 
-    if (speeds_.size() > 1) {
+    if (speeds_.size() > 2) {
 
-        splineSet_ = spline(speed_offsets_, speeds_);
+        splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1);
+        splineSet_ = splineSetPlus_.set;
+        splineCondition_ = splineSetPlus_.spline_condition;
+        DBG(splineCondition_->alpha);
 
         if (lastSpline.x < 0) {
             splineSet_.insert(splineSet_.begin(), lastSpline);
         }
 
-        lastSpline = splineSet_.back();
+        lastSpline = splineSetPlus_.set[splineSetPlus_.set.size()-1-1];
         lastSpline.x = lastSpline.x - outN;
+
+        splineSet_.pop_back();
 
         ratios_ = createSpeedVector(splineSet_, outN);
         DBG("ratios size: " << ratios_.size());
-        append_vector_csv("ratios_grudzien.csv", ratios_, 12);
+        append_vector_csv("ratios_17_12_r3.csv", ratios_, 12);
     }
     else {
         DBG("processBlock: no messages to create vector from");
         DBG("processBlock: pre render values reset");
         splineSet_ = {};
         lastSpline = {};
+        splineCondition_.reset();
         ratios_ = {};
     }
 

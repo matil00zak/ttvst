@@ -203,7 +203,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     playhead_ = 0.0; // reset on (re)start
     //playheadReversed_ = 0;
     setLatencySamples(samplesPerBlock);
-    tau = 0.05;
+    tau = 0.07;
     alpha = 1.0 - std::exp(-1.0 / (sampleRate * tau));
     
 }
@@ -360,6 +360,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
 
     if (speeds_.size() > 2) {
+        tau = 0.04;
+        alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tau));
         ratios_ = {};
         splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1);
         splineSet_ = splineSetPlus_.set;
@@ -380,16 +382,19 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         //append_vector_csv("ratios_reg_002.csv", ratios_, 6);
         smoothRatios(ratios_, alpha);
         DBG("ratios size: " << ratios_.size());
-        //append_vector_csv("ratios_smo_002.csv", ratios_, 6);
+        append_vector_csv("ratios_smo_010.csv", ratios_, 6);
     }
     else {
         DBG("processBlock: no messages to create vector from");
         DBG("processBlock: pre render values reset");
+        tau = 1.0;
+        alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tau));
         splineSet_ = {};
         lastSpline = {};
         splineCondition_.reset();
         ratios_.assign(outN, 1.0);
-        ratioLPState - 1.0;
+        smoothRatios(ratios_, alpha);
+        append_vector_csv("ratios_smo_010.csv", ratios_, 6);
     }
 
 

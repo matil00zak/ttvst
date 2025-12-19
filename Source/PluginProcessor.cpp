@@ -21,7 +21,14 @@ using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<Loade
 struct Seg { int offset = 0; int value  = 0; };
 
 
-
+void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha)
+{
+    for (auto& r : ratios)
+    {
+        ratioLPState += alpha * (r - ratioLPState);
+        r = ratioLPState;
+    }
+}
 
 int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
     const int delta = end - start;                 // can be negative
@@ -196,6 +203,8 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     playhead_ = 0.0; // reset on (re)start
     //playheadReversed_ = 0;
     setLatencySamples(samplesPerBlock);
+    tau = 0.05;
+    alpha = 1.0 - std::exp(-1.0 / (sampleRate * tau));
     
 }
 
@@ -351,7 +360,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
 
     if (speeds_.size() > 2) {
-
+        ratios_ = {};
         splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1);
         splineSet_ = splineSetPlus_.set;
         splineCondition_ = splineSetPlus_.spline_condition;
@@ -367,8 +376,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         splineSet_.pop_back();
 
         ratios_ = createSpeedVector(splineSet_, outN);
+        ratios_ = createSpeedVector(splineSet_, outN);
+        //append_vector_csv("ratios_reg_002.csv", ratios_, 6);
+        smoothRatios(ratios_, alpha);
         DBG("ratios size: " << ratios_.size());
-        append_vector_csv("ratios_17_12_r3.csv", ratios_, 12);
+        //append_vector_csv("ratios_smo_002.csv", ratios_, 6);
     }
     else {
         DBG("processBlock: no messages to create vector from");
@@ -376,7 +388,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         splineSet_ = {};
         lastSpline = {};
         splineCondition_.reset();
-        ratios_ = {};
+        ratios_.assign(outN, 1.0);
+        ratioLPState - 1.0;
     }
 
 

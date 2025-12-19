@@ -29,6 +29,7 @@ public:
     //==============================================================================
     PluginTestowy2AudioProcessor();
     ~PluginTestowy2AudioProcessor() override;
+    void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha);
 
 
     ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
@@ -98,6 +99,9 @@ private:
     std::vector<ttvst::splines::splineSet> lastSplines, splineSet_;
     std::optional<ttvst::splines::splineCondition> splineCondition_;
     ttvst::splines::splineSet lastSpline;
+    double ratioLPState = 1.0;
+    double tau;
+    double alpha;
     std::vector<double> lastYFront;
     bool loop_ = true;
     bool afterRender = false;

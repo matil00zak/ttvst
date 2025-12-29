@@ -354,8 +354,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     ttvst::helps::vectorPairDbl speedinfo = positionsToSpeed(values_, offsets_, outN, 2);
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
-    for (auto ofs : speed_offsets_) {
-        DBG(ofs);
+    for (auto s : speeds_) {
+        DBG(s);
     }
 
 
@@ -382,23 +382,24 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         //append_vector_csv("ratios_reg_002.csv", ratios_, 6);
         smoothRatios(ratios_, alpha);
         DBG("ratios size: " << ratios_.size());
-        append_vector_csv("ratios_smo_010.csv", ratios_, 6);
+        //append_vector_csv("ratios_smo_010.csv", ratios_, 6);
     }
     else {
         DBG("processBlock: no messages to create vector from");
         DBG("processBlock: pre render values reset");
-        tau = 1.0;
+        tau = 0.5;
         alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tau));
         splineSet_ = {};
         lastSpline = {};
         splineCondition_.reset();
         ratios_.assign(outN, 1.0);
         smoothRatios(ratios_, alpha);
-        append_vector_csv("ratios_smo_010.csv", ratios_, 6);
+        //append_vector_csv("ratios_smo_010.csv", ratios_, 6);
     }
 
 
     if (ratios_.size() == outN) {
+        /*
         for (int i = 0; i < outN; i++) {
             auto index0 = (unsigned long)playhead_;
             auto index1 = index0 == (srcN - 1) ? (unsigned int)0 : index0 + 1;
@@ -409,6 +410,37 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
                 auto currentSample = value0 + frac * (value1 - value0);
                 buffer.setSample(ch, i, (float)currentSample);
             }
+            playhead_ += ratios_[i];
+        }
+        */
+        for (int i = 0; i < outN; i++)
+        {
+            const long index1 = (long)playhead_;
+            const long index0 = (index1 - 1 + srcN) % srcN;
+            const long index2 = (index1 + 1) % srcN;
+            const long index3 = (index1 + 2) % srcN;
+
+            const double frac = playhead_ - (double)index1;
+            const double frac2 = frac * frac;
+            const double frac3 = frac2 * frac;
+
+            for (int ch = 0; ch < outCh; ch++)
+            {
+                const float y0 = *data->buffer.getReadPointer(ch, index0);
+                const float y1 = *data->buffer.getReadPointer(ch, index1);
+                const float y2 = *data->buffer.getReadPointer(ch, index2);
+                const float y3 = *data->buffer.getReadPointer(ch, index3);
+
+                // 4-point cubic Hermite (Catmull-Rom)
+                const double a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+                const double a1 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
+                const double a2 = -0.5 * y0 + 0.5 * y2;
+                const double a3 = y1;
+
+                const float out = (float)(a0 * frac3 + a1 * frac2 + a2 * frac + a3);
+                buffer.setSample(ch, i, out);
+            }
+
             playhead_ += ratios_[i];
         }
     }

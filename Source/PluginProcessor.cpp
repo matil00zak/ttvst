@@ -17,7 +17,7 @@
 #include "helpers.h"
 #include "cubicSplines.h"
 //==============================================================================
-using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
+//using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
 struct Seg { int offset = 0; int value  = 0; };
 
 
@@ -30,6 +30,9 @@ void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, dou
     }
 }
 
+
+//old delete this
+/*
 int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
     const int delta = end - start;                 // can be negative
     const double frac = static_cast<double>(delta) / 16383.0;   // 14-bit range
@@ -37,8 +40,12 @@ int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
     const double samples = frac * (static_cast<double>(hostSr) * seconds);
     return static_cast<int>(std::lround(samples));
 }
+*/
 
 
+
+//old delete this
+/*
 int PluginTestowy2AudioProcessor::renderSeg(LoadedAudioPtr srcAudio,
     juce::AudioSampleBuffer outBuffer,
     juce::LagrangeInterpolator interp,
@@ -56,9 +63,11 @@ int PluginTestowy2AudioProcessor::renderSeg(LoadedAudioPtr srcAudio,
     }
     return realDelta;
 }
+*/
 
 
-static LoadedPair
+
+static std::shared_ptr<LoadedAudio>
 loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 {
     std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(file));
@@ -68,18 +77,12 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
     const juce::int64 numSamples64 = reader->lengthInSamples;
     if (numChannels <= 0 || numSamples64 <= 0) return {};
 
-    // Uwaga: AudioBuffer rozmiar w int – rzutujemy swiadomie (typowo pliki < 2 31 probek)
     const int numSamples = (int)numSamples64;
 
     auto out = std::make_shared<LoadedAudio>();
     out->sampleRate = (int)reader->sampleRate;
-    auto outReversed = std::make_shared<LoadedAudio>();
-    out->sampleRate = (int)reader->sampleRate;
-    outReversed->buffer.setSize(numChannels, numSamples, false, false, true);
     out->buffer.setSize(numChannels, numSamples, false, false, true);
-    // setSize(ch, samples, keepContent=false, clearExtraSpace=false, avoidReallocating=true)
 
-    // Czytamy partiami, by wspierac bardzo dlugie pliki
     const int block = 16384;
     juce::int64 filePos = 0;
 
@@ -87,9 +90,6 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
     {
         const int toRead = (int)std::min<juce::int64>(block, numSamples64 - filePos);
 
-        // Czytamy bezposrednio do bufora docelowego (destStart = (int)filePos)
-        // Flagi true/true odnosza sis do L/R przy plikach stereo — przy mono/wiecej kanalow
-        // JUCE i tak wypelni dostepne kanaly; to najczestszy przypadek (1–2 ch).
         if (!reader->read(&out->buffer,
             (int)filePos,            // destStartSample
             toRead,                   // numSamples
@@ -99,19 +99,14 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 
         filePos += toRead;
     }
-    outReversed->buffer.makeCopyOf(out->buffer);
-    outReversed->buffer.reverse(0, numSamples);
 
-    return { out, outReversed };
+    return out;
 }
 LoadedAudioPtr PluginTestowy2AudioProcessor::getLoaded() const noexcept{
     // atomowy odczyt wskaznika (acquire para dla release w loaderze)
     return std::atomic_load_explicit(&loaded_, std::memory_order_acquire);
 }
-LoadedAudioPtr PluginTestowy2AudioProcessor::getLoadedReversed() const noexcept {
-    // atomowy odczyt wskaznika (acquire para dla release w loaderze)
-    return std::atomic_load_explicit(&loadedReversed_, std::memory_order_acquire);
-}
+
 
 PluginTestowy2AudioProcessor::PluginTestowy2AudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -201,7 +196,6 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     // initialisation that you need..
     hostSampleRate_ = sampleRate;
     playhead_ = 0.0; // reset on (re)start
-    //playheadReversed_ = 0;
     setLatencySamples(samplesPerBlock);
     tau = 0.07;
     alpha = 1.0 - std::exp(-1.0 / (sampleRate * tau));
@@ -249,8 +243,8 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
             juce::AudioFormatManager fm;
             fm.registerBasicFormats(); // WAV/AIFF/FLAC/MP3* (MP3 depends on defines)
 
-            auto[ data, dataReversed ] = loadFileIntoAudioBuffer(fm, file); // std::shared_ptr<LoadedAudio>
-            if (data && dataReversed)
+            auto data = loadFileIntoAudioBuffer(fm, file); // std::shared_ptr<LoadedAudio>
+            if (data)
             {   
                 DBG("Loaded: " << file.getFileName()
                     << "  SR=" << data->sampleRate
@@ -259,15 +253,10 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 
                 // Publish as const to match the field type `std::shared_ptr<const LoadedAudio>`
                 // NOTE: atomic_store/atomic_load overloads for shared_ptr are declared in <memory>.
-                if (data->getNumSamples() == dataReversed->getNumSamples()) {
-                    std::shared_ptr<const LoadedAudio> published = std::move(data);
-                    std::atomic_store_explicit(&loaded_, published, std::memory_order_release);
-                    std::shared_ptr<const LoadedAudio> publishedReversed = std::move(dataReversed);
-                    std::atomic_store_explicit(&loadedReversed_, publishedReversed, std::memory_order_release);
-                }
-                else {
-                    DBG("data and its reversed version have unexpected differences");
-                }
+                
+                std::shared_ptr<const LoadedAudio> published = std::move(data);
+                std::atomic_store_explicit(&loaded_, published, std::memory_order_release);
+
                 DBG("LOADEDD");
             }
             else
@@ -299,8 +288,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     //Snapshot loaded data
     auto data = getLoaded();
-    auto dataReversed = getLoadedReversed();
-    if (!data || !dataReversed) return;
+    if (!data) return;
+
     const int srcCh = data->buffer.getNumChannels();
     const int srcN = data->buffer.getNumSamples();
     const int outCh = buffer.getNumChannels();
@@ -399,6 +388,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
 
     if (ratios_.size() == outN) {
+        //linear
         /*
         for (int i = 0; i < outN; i++) {
             auto index0 = (unsigned long)playhead_;
@@ -413,6 +403,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             playhead_ += ratios_[i];
         }
         */
+        //hermite
         for (int i = 0; i < outN; i++)
         {
             const long index1 = (long)playhead_;

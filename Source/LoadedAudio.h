@@ -1,19 +1,7 @@
 #pragma once
-
-// Minimal JUCE include for AudioBuffer and basic types.
-// If you use the Unity build, this can be just <JuceHeader.h>.
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <memory>
 
-/**
- * LoadedAudio
- * -----------
- * Immutable container for fully-decoded audio held in RAM.
- * - sampleRate: Hz of the decoded buffer
- * - buffer: interleaved-by-channel, non-owning to the outside (we don't expose non-const access)
- *
- * Intended to be shared across threads via std::shared_ptr<const LoadedAudio>.
- */
 struct LoadedAudio
 {
     /// Construct an empty/invalid container.

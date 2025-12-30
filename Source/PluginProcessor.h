@@ -35,7 +35,7 @@ public:
     ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
 
     std::shared_ptr<const LoadedAudio> getLoaded() const noexcept;
-    std::shared_ptr<const LoadedAudio> getLoadedReversed() const noexcept;
+    //std::shared_ptr<const LoadedAudio> getLoadedReversed() const noexcept;
     void beginLoadFile(const juce::File& file);
     int getDeltaPh(int endVal, int startVal, int hostSr);
     int renderSeg(LoadedAudioPtr srcAudio,
@@ -84,32 +84,31 @@ public:
 private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginTestowy2AudioProcessor)
-    std::shared_ptr<const LoadedAudio> loaded_, loadedReversed_;
-    ttvst::MidiMessageManager midiLog_;
-    std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
-    std::optional<double> lastValue, afterRenderValue, preRenderValue;
-    std::vector<double> offsets_, values_, speeds_, speed_offsets_, ratios_;
-    enum block { pre, render, after };
-    double hostSampleRate_ = 44100.0;  // set in prepareToPlay
-    //int64_t playhead_ = 0;
-    //int64_t playheadReversed_ = 0;// current read position in source samples
-    double playhead_ = 0;
-    std::vector<double> thisValueVec, afterRenderValueVec, preRenderValueVec;
-    std::vector<double> thisOffsetVec, afterRenderOffsetVec, preRenderOffsetVec;
-    std::vector<ttvst::splines::splineSet> lastSplines, splineSet_;
-    std::optional<ttvst::splines::splineCondition> splineCondition_;
-    ttvst::splines::splineSet lastSpline;
-    double ratioLPState = 1.0;
-    double tau;
-    double alpha;
-    std::vector<double> lastYFront;
-    bool loop_ = true;
-    bool afterRender = false;
-    bool preRender = false;
-    juce::AudioBuffer<float> lastBlock_;
-    juce::MidiBuffer lastMidi_;
-    bool haveLastMidi_ = false;
-    bool haveLast_ = false;
-    juce::LinearInterpolator interp;
+    
+    std::shared_ptr<const LoadedAudio> loaded_;                                     // loaded audio ptr
+    ttvst::MidiMessageManager midiLog_;                                             // logs container
+    std::vector<double> offsets_, values_;                                          // contains all avilable msgs data, just storage, dbg
+    std::vector<double> speeds_, speed_offsets_, ratios_;                           // crucial very important data, base for generation
+    double hostSampleRate_ = 44100.0;
+    double playhead_ = 0.0;                                                         // the playhead position
+    std::vector<double> thisValueVec, afterRenderValueVec, preRenderValueVec;       // message data stream containers
+    std::vector<double> thisOffsetVec, afterRenderOffsetVec, preRenderOffsetVec;    // message data stream containers
+    std::vector<ttvst::splines::splineSet> splineSet_;  // deleted: lastSplines     // set of splines (generated every iteration)
+    std::optional<ttvst::splines::splineCondition> splineCondition_;                // condition passed between spline set generation
+    ttvst::splines::splineSet lastSpline;                                           // last spline container - completes the spline set
+    double ratioLPState = 1.0;                                                      // speed inertia base // speed inertia container
+    double tau, alpha;                                                              // inertia parameters
+    //std::vector<double> lastYFront;
+    //bool loop_ = true;
+    //bool afterRender = false;
+    //bool preRender = false;
+    juce::AudioBuffer<float> lastBlock_;                                            // should be used to detect buffer size change. to do.
+    juce::MidiBuffer lastMidi_;                                                     // midi messages contariner. in use
+    bool haveLastMidi_ = false;                                                     // old functionality. 
+    //bool haveLast_ = false;                                                         
+    //juce::LinearInterpolator interp;
+
+    //std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
+    //std::optional<double> lastValue, afterRenderValue, preRenderValue;
 
 };

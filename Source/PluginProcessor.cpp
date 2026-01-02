@@ -31,42 +31,6 @@ void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, dou
 }
 
 
-//old delete this
-/*
-int PluginTestowy2AudioProcessor::getDeltaPh(int start, int end, int hostSr) {
-    const int delta = end - start;                 // can be negative
-    const double frac = static_cast<double>(delta) / 16383.0;   // 14-bit range
-    const double seconds = 2.0;
-    const double samples = frac * (static_cast<double>(hostSr) * seconds);
-    return static_cast<int>(std::lround(samples));
-}
-*/
-
-
-
-//old delete this
-/*
-int PluginTestowy2AudioProcessor::renderSeg(LoadedAudioPtr srcAudio,
-    juce::AudioSampleBuffer outBuffer,
-    juce::LagrangeInterpolator interp,
-    double ratio,
-    int lenIn,
-    int lenOut,
-    int numCh){
-    const float* src = nullptr;
-    int realDelta = 0;
-    for (int ch = 0; ch < numCh; ch++){
-        src = srcAudio->buffer.getReadPointer(ch, playhead_);
-        float* out = outBuffer.getWritePointer(ch, 0);
-        realDelta = interp.process(ratio, src, out, lenOut, lenIn, 0);
-        interp.reset();
-    }
-    return realDelta;
-}
-*/
-
-
-
 static std::shared_ptr<LoadedAudio>
 loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 {
@@ -370,11 +334,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         lastSpline = splineSetPlus_.jointSpline;
         lastSpline.x = lastSpline.x - outN;
 
-        //splineSet_.pop_back();
-
         ratios_ = createSpeedVector(splineSet_, outN);
-        //ratios_ = createSpeedVector(splineSet_, outN);
-
         DBG("ratios size: " << ratios_.size());
         
     }
@@ -411,8 +371,10 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
         */
         //hermite
+        //looped playback
         for (int i = 0; i < outN; i++)
-        {
+        {   
+            wrapPlayhead(playhead_, srcN);
             const long index1 = (long)playhead_;
             const long index0 = (index1 - 1 + srcN) % srcN;
             const long index2 = (index1 + 1) % srcN;
@@ -443,7 +405,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
     }
     else {
+        DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         for (int i = 0; i < outN; i++) {
+            wrapPlayhead(playhead_, srcN);
             auto index0 = (unsigned long)playhead_;
             for (int ch = 0; ch < outCh; ch++) {
                 float value = *data->buffer.getReadPointer(0, index0);

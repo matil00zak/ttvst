@@ -195,6 +195,21 @@ namespace ttvst::helps {
         DBG("helpers::insertBaseSpeed: inserted base speed = " << baseSpeed);
     }
 
+
+
+
+
+    void wrapPlayhead(double& playhead, long srcLength) {
+        playhead = std::fmod(playhead, (double)srcLength);
+        if (playhead < 0.0) {
+            playhead += srcLength;
+        }
+    }
+
+
+
+
+
 }
 
 

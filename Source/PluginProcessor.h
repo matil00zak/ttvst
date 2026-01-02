@@ -99,7 +99,9 @@ private:
     std::optional<ttvst::splines::splineCondition> splineCondition_;                // condition passed between spline set generation
     ttvst::splines::splineSet lastSpline;                                           // last spline container - completes the spline set
     double ratioLPState = 0.0;                                                      // speed inertia base // speed inertia container
-    double tau, alpha;                                                              // inertia parameters
+    double tau, alpha;
+    std::atomic<int> debugEvent{ 0 };
+    // inertia parameters
     //std::vector<double> lastYFront;
     //bool loop_ = true;
     //bool afterRender = false;

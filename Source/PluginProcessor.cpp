@@ -215,7 +215,7 @@ bool PluginTestowy2AudioProcessor::isBusesLayoutSupported (const BusesLayout& la
 
 void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 {
-    DBG("beginLoadFile: " << file.getFullPathName());
+    //DBG("beginLoadFile: " << file.getFullPathName());
 
     std::thread([this, file]
         {
@@ -225,10 +225,10 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
             auto data = loadFileIntoAudioBuffer(fm, file); // std::shared_ptr<LoadedAudio>
             if (data)
             {   
-                DBG("Loaded: " << file.getFileName()
-                    << "  SR=" << data->sampleRate
-                    << "  ch=" << data->buffer.getNumChannels()
-                    << "  samples=" << data->buffer.getNumSamples());
+                //DBG("Loaded: " << file.getFileName()
+                //    << "  SR=" << data->sampleRate
+                //    << "  ch=" << data->buffer.getNumChannels()
+                //    << "  samples=" << data->buffer.getNumSamples());
 
                 // Publish as const to match the field type `std::shared_ptr<const LoadedAudio>`
                 // NOTE: atomic_store/atomic_load overloads for shared_ptr are declared in <memory>.
@@ -236,11 +236,11 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
                 std::shared_ptr<const LoadedAudio> published = std::move(data);
                 std::atomic_store_explicit(&loaded_, published, std::memory_order_release);
 
-                DBG("LOADEDD");
+                //DBG("LOADEDD");
             }
             else
             {
-                DBG("Failed to load: " << file.getFullPathName());
+                //DBG("Failed to load: " << file.getFullPathName());
             }
         }).detach();
 }
@@ -277,18 +277,18 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const int outN = buffer.getNumSamples();
     if (srcN <= 0) return;
 
-    if (hasPitchWheelMessage(lastMidi_)) {
-        DBG("proessBlock: lastMIDI has msgs");
-    }
-    else {
-        DBG("processBlock: lastMIDI no msgs");
-    }
+    //if (hasPitchWheelMessage(lastMidi_)) {
+    //    DBG("proessBlock: lastMIDI has msgs");
+    //}
+    //else {
+    //    DBG("processBlock: lastMIDI no msgs");
+    //}
 
 
     //IF HOST RESIZES BUFFER THEN DROP LAST BLOCK AND UPDATE LAST BLOCK SIZE
     if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN) {
         lastBlock_.setSize(outCh, outN, false, true, true);
-        DBG("block resized");
+        //DBG("block resized");
         haveLastMidi_ = false;
     }
 
@@ -330,9 +330,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         insertBaseSpeed(speeds_, speed_offsets_, ratioLPState);
     }
     
-    for (auto s : speeds_) {
-        DBG(s);
-    }
+    //for (auto s : speeds_) {
+    //    DBG(s);
+    //}
 
     if (speeds_.size() > 1) {
         tau = 0.04;
@@ -341,7 +341,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1, outN);
         splineSet_ = splineSetPlus_.set;
         splineCondition_ = splineSetPlus_.spline_condition;
-        DBG("alpha: " << splineCondition_->alpha);
+        //DBG("alpha: " << splineCondition_->alpha);
 
         if (lastSpline.x < 0) {
             splineSet_.insert(splineSet_.begin(), lastSpline);
@@ -351,22 +351,16 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         lastSpline.x = lastSpline.x - outN;
 
         ratios_ = createSpeedVector(splineSet_, outN);
-        DBG("ratios size: " << ratios_.size());
+        //DBG("ratios size: " << ratios_.size());
         
     }
     else {
-        DBG("processBlock: no messages to create vector from");
-        DBG("processBlock: pre render values reset");
+        //DBG("processBlock: no messages to create vector from");
         tau = 0.5;
         alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tau));
         splineSet_ = {};
         lastSpline = {};
         splineCondition_.reset();
-        //essentailly motor speed
-        // if motor on:
-            // assign motor speed
-        // else
-            // assign 0. motor is off
         if (motorOn) {
             ratios_.assign(outN, 1.0);
         }
@@ -381,7 +375,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     if (ratios_.size() == outN) {
         //smoothing only here
         smoothRatios(ratios_, alpha);
-        append_vector_csv("ratios_smo_2048_006.csv", ratios_, 6);
+        //append_vector_csv("ratios_smo_2048_006.csv", ratios_, 6);
         //linear
         /*
         for (int i = 0; i < outN; i++) {
@@ -432,7 +426,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
     }
     else {
-        DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        //DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         for (int i = 0; i < outN; i++) {
             wrapPlayhead(playhead_, srcN);
             auto index0 = (unsigned long)playhead_;

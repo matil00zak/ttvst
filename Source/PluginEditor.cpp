@@ -60,7 +60,7 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
     midiMonitor.setFont(juce::FontOptions(13.0f));
     addAndMakeVisible(midiMonitor);
     
-    startTimerHz(30); // poll MIDI log ~30 FPS
+    startTimerHz(10); // poll MIDI log ~30 FPS
 
 
 

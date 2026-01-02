@@ -47,5 +47,6 @@ namespace ttvst::helps
     // is meant to be used with last generated spline to complete the current buffer on its beggining
     vectorPairDbl positionsToSpeed(std::vector<double> positions, std::vector<double> offsets, int outN, int lookahead);
 
-
+    void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs);
+    void insertBaseSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double baseSpeed);
 } // namespace ttvst::midi

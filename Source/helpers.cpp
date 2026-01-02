@@ -10,7 +10,6 @@
 
 #include "helpers.h"
 #include <algorithm>
-
 namespace ttvst::helps {
 
     
@@ -181,7 +180,20 @@ namespace ttvst::helps {
     }
 
 
-
+    void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs) {
+        for (int i = 0; i < speeds.size(); i++) {
+            if (speeds[i] > maxSpeedAbs) {
+                DBG("helpers::catchSpeedOutliers: outlier value = " << speeds[i]);
+                speeds[i] = copysign(maxSpeedAbs, speeds[i]);
+            }
+        }
+    }
+    //only call on start of midi stream - when there is no prerender data / lastSpline 
+    void insertBaseSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double baseSpeed) {
+        offsets.insert(offsets.begin(), 0.0);
+        speeds.insert(speeds.begin(), baseSpeed);
+        DBG("helpers::insertBaseSpeed: inserted base speed = " << baseSpeed);
+    }
 
 }
 

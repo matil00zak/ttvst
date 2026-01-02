@@ -182,7 +182,7 @@ namespace ttvst::splines {
     }
 
 
-    splineSetPlus splineSpecial(vec& x, vec& y, std::optional<splineCondition> lastSplineCondition, int newCondIdx) {
+    splineSetPlus splineSpecial(vec& x, vec& y, std::optional<splineCondition> lastSplineCondition, int newCondIdx, int outN) {
         // must have at least two points and same length
         if (x.size() <= 1 || y.size() <= 1 || x.size() != y.size()) {
             return {}; // empty result: nothing to do
@@ -197,11 +197,18 @@ namespace ttvst::splines {
             thisSplineCondition.mu = 0;
             thisSplineCondition.z = 0;
         }
+        int jointIdx = 0;
+        for (int i = 1; i < x.size(); i++) {
+            if (x[i] > outN) {
+                jointIdx = i - 1;
+                break;
+            }
+        }
 
         int n = x.size() - 1;
         vec a;
-
-        int idx = n - newCondIdx;
+        DBG("joint = " << jointIdx << " n = " << n);
+        //int idx = n - newCondIdx;
 
         a.insert(a.begin(), y.begin(), y.end());
         vec b(n);
@@ -215,7 +222,8 @@ namespace ttvst::splines {
         alpha.push_back(thisSplineCondition.alpha);
         for (int i = 1; i < n; ++i)
             alpha.push_back(3 * (a[i + 1] - a[i]) / h[i] - 3 * (a[i] - a[i - 1]) / h[i - 1]);
-
+        
+        DBG("alpha size = " << alpha.size());
         vec c(n + 1);
         vec l(n + 1);
         vec mu(n + 1);
@@ -242,8 +250,8 @@ namespace ttvst::splines {
             d[j] = (c[j + 1] - c[j]) / 3 / h[j];
         }
 
-        std::vector<splineSet> output_set(n);
-        for (int i = 0; i < n; ++i)
+        std::vector<splineSet> output_set(jointIdx + 1);
+        for (int i = 0; i < jointIdx + 1; ++i)
         {
             output_set[i].a = a[i];
             output_set[i].b = b[i];
@@ -252,12 +260,24 @@ namespace ttvst::splines {
             output_set[i].x = x[i];
         }
         splineCondition next_condition;
-        next_condition.alpha = alpha[idx];
-        next_condition.l = l[idx];
-        next_condition.mu = mu[idx];
-        next_condition.z = z[idx];
+        if (jointIdx + 1 < n) {
+            next_condition.alpha = alpha[jointIdx + 1];
+            next_condition.l = l[jointIdx + 1];
+            next_condition.mu = mu[jointIdx + 1];
+            next_condition.z = z[jointIdx + 1];
+        }
+        else {
+            next_condition.alpha = alpha.back();
+            next_condition.l =  l.back();
+            next_condition.mu = mu.back();
+            next_condition.z = z.back();
+            DBG("values assigned from the last spline that is the end spline - new speeds should be one");
+        }
 
-        splineSetPlus output_setPlus = { output_set, next_condition };
+
+        splineSet joint_spline = output_set[jointIdx];
+
+        splineSetPlus output_setPlus = { output_set, next_condition, joint_spline};
         return { output_setPlus };
     }
 

@@ -37,6 +37,7 @@ namespace ttvst::splines {
     struct splineSetPlus {
         std::vector<splineSet> set;
         splineCondition spline_condition;
+        splineSet jointSpline;
 
     };
 
@@ -57,6 +58,6 @@ namespace ttvst::splines {
 
     std::vector<splineSet> spline(vec& x, vec& y);
 
-    splineSetPlus splineSpecial(vec& x, vec& y, std::optional<splineCondition> spline_condition, int newCondIndex);
+    splineSetPlus splineSpecial(vec& x, vec& y, std::optional<splineCondition> spline_condition, int newCondIndex, const int outN);
 
 }

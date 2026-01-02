@@ -33,6 +33,7 @@ public:
 
 
     ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
+    juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
 
     std::shared_ptr<const LoadedAudio> getLoaded() const noexcept;
     //std::shared_ptr<const LoadedAudio> getLoadedReversed() const noexcept;
@@ -83,8 +84,9 @@ public:
 
 private:
     //==============================================================================
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginTestowy2AudioProcessor)
-    
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginTestowy2AudioProcessor)
+    juce::AudioProcessorValueTreeState apvts;
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     std::shared_ptr<const LoadedAudio> loaded_;                                     // loaded audio ptr
     ttvst::MidiMessageManager midiLog_;                                             // logs container
     std::vector<double> offsets_, values_;                                          // contains all avilable msgs data, just storage, dbg
@@ -96,7 +98,7 @@ private:
     std::vector<ttvst::splines::splineSet> splineSet_;  // deleted: lastSplines     // set of splines (generated every iteration)
     std::optional<ttvst::splines::splineCondition> splineCondition_;                // condition passed between spline set generation
     ttvst::splines::splineSet lastSpline;                                           // last spline container - completes the spline set
-    double ratioLPState = 1.0;                                                      // speed inertia base // speed inertia container
+    double ratioLPState = 0.0;                                                      // speed inertia base // speed inertia container
     double tau, alpha;                                                              // inertia parameters
     //std::vector<double> lastYFront;
     //bool loop_ = true;

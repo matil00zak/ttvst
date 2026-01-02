@@ -44,6 +44,14 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
         midiMonitor.clear();
         };
 
+    addAndMakeVisible(motorButton);
+    motorButton.setButtonText("Motor");
+    motorAttachment = std::make_unique<ButtonAttachment>(
+        audioProcessor.getAPVTS(),
+        "motorOn",
+        motorButton
+    );
+
     // MIDI monitor setup
     midiMonitor.setMultiLine(true);
     midiMonitor.setReadOnly(true);
@@ -82,10 +90,12 @@ void PluginTestowy2AudioProcessorEditor::resized()
     // subcomponents in your editor..
     loadButton.setBounds(getLocalBounds().reduced(20));
     clearLogButton.setBounds(getLocalBounds().reduced(20));
+    motorButton.setBounds(getLocalBounds().reduced(20));
     auto area = getLocalBounds().reduced(8);
     auto top = area.removeFromTop(36);
-    loadButton.setBounds(top.removeFromLeft(140));
-    clearLogButton.setBounds(top.removeFromLeft(280));
+    loadButton.setBounds(top.removeFromLeft(100));
+    clearLogButton.setBounds(top.removeFromLeft(200));
+    motorButton.setBounds(top.removeFromLeft(300));
     area.removeFromTop(8);
     midiMonitor.setBounds(area);
 

@@ -30,6 +30,9 @@ private:
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
     PluginTestowy2AudioProcessor& audioProcessor;
+    juce::ToggleButton motorButton;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    std::unique_ptr<ButtonAttachment> motorAttachment;
     juce::TextButton loadButton{ "Load File" };
     juce::TextButton clearLogButton{ "Clear Logs" };
     juce::TextEditor midiMonitor;

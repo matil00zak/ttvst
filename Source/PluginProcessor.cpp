@@ -21,6 +21,9 @@
 struct Seg { int offset = 0; int value  = 0; };
 
 
+
+
+
 void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha)
 {
     for (auto& r : ratios)
@@ -82,12 +85,24 @@ PluginTestowy2AudioProcessor::PluginTestowy2AudioProcessor()
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
                        )
+    , apvts(*this, nullptr, "PARAMS", createParameterLayout())
 #endif
 {
 }
 
 PluginTestowy2AudioProcessor::~PluginTestowy2AudioProcessor()
 {
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor::createParameterLayout() {
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "motorOn",
+        "Motor",
+        false
+    ));
+    return { params.begin(), params.end() };
 }
 
 //==============================================================================
@@ -251,6 +266,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     speeds_ = {};
     speed_offsets_ = {};
 
+    const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
+
     //Snapshot loaded data
     auto data = getLoaded();
     if (!data) return;
@@ -318,7 +335,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         DBG(s);
     }
 
-    if (speeds_.size() > 2) {
+    if (speeds_.size() > 1) {
         tau = 0.04;
         alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tau));
         ratios_ = {};
@@ -346,7 +363,18 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         splineSet_ = {};
         lastSpline = {};
         splineCondition_.reset();
-        ratios_.assign(outN, 1.0);
+        //essentailly motor speed
+        // if motor on:
+            // assign motor speed
+        // else
+            // assign 0. motor is off
+        if (motorOn) {
+            ratios_.assign(outN, 1.0);
+        }
+        else {
+            ratios_.assign(outN, 0.0);
+        }
+        
         
     }
 

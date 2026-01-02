@@ -76,19 +76,18 @@ LoadedAudioPtr PluginTestowy2AudioProcessor::getLoaded() const noexcept{
 
 
 PluginTestowy2AudioProcessor::PluginTestowy2AudioProcessor()
-#ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       )
-    , apvts(*this, nullptr, "PARAMS", createParameterLayout())
+    : AudioProcessor(BusesProperties()
+#if ! JucePlugin_IsMidiEffect
+#if ! JucePlugin_IsSynth
+        .withInput("Input", juce::AudioChannelSet::stereo(), true)
 #endif
+        .withOutput("Output", juce::AudioChannelSet::stereo(), true)
+#endif
+    )
+    , apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
 }
+
 
 PluginTestowy2AudioProcessor::~PluginTestowy2AudioProcessor()
 {

@@ -67,7 +67,7 @@ namespace ttvst::helps {
         std::vector<double> values;
         if (buffer.isEmpty()) {
             return std::nullopt;
-            DBG("No messages in this buffer");
+            //DBG("No messages in this buffer");
         }
         for (const auto metadata : buffer) {
             const auto& m = metadata.getMessage();
@@ -78,7 +78,7 @@ namespace ttvst::helps {
         }
         if (values.empty()) {
             return std::nullopt;
-            DBG("No pitch wheel messages in this buffer");
+            //DBG("No pitch wheel messages in this buffer");
         }
         return values;
     }
@@ -93,7 +93,7 @@ namespace ttvst::helps {
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
             offsets.push_back(metadata.samplePosition);
-            DBG("helpers::offsetsVector: offsets in this buffer: " << offsets.size());
+            //DBG("helpers::offsetsVector: offsets in this buffer: " << offsets.size());
         }
         if (offsets.empty()) {
             return std::nullopt;
@@ -141,7 +141,7 @@ namespace ttvst::helps {
             return values;
         }
         else {
-            DBG("pitchToSample: values are empty");
+            //DBG("pitchToSample: values are empty");
         }
 
     }

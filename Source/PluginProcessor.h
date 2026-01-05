@@ -38,14 +38,7 @@ public:
     std::shared_ptr<const LoadedAudio> getLoaded() const noexcept;
     //std::shared_ptr<const LoadedAudio> getLoadedReversed() const noexcept;
     void beginLoadFile(const juce::File& file);
-    int getDeltaPh(int endVal, int startVal, int hostSr);
-    int renderSeg(LoadedAudioPtr srcAudio,
-        juce::AudioSampleBuffer outBuffer,
-        juce::LagrangeInterpolator interp,
-        double ratio,
-        int lenIn,
-        int lenOut,
-        int numCh);
+
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -91,7 +84,7 @@ private:
     ttvst::MidiMessageManager midiLog_;                                             // logs container
     std::vector<double> offsets_, values_;                                          // contains all avilable msgs data, just storage, dbg
     std::vector<double> speeds_, speed_offsets_, ratios_;                           // crucial very important data, base for generation
-    double hostSampleRate_ = 44100.0;
+    double hostSampleRate_;
     double playhead_ = 0.0;                                                         // the playhead position
     std::vector<double> thisValueVec, afterRenderValueVec, preRenderValueVec;       // message data stream containers
     std::vector<double> thisOffsetVec, afterRenderOffsetVec, preRenderOffsetVec;    // message data stream containers
@@ -102,18 +95,11 @@ private:
     double tau, alpha;
     std::atomic<int> debugEvent{ 0 };
     // inertia parameters
-    //std::vector<double> lastYFront;
-    //bool loop_ = true;
-    //bool afterRender = false;
-    //bool preRender = false;
+
     juce::AudioBuffer<float> lastBlock_;                                            // should be used to detect buffer size change. to do.
     juce::MidiBuffer lastMidi_;                                                     // midi messages contariner. in use
     bool haveLastMidi_ = false;                                                     // old functionality. 
-    //bool haveLast_ = false;                                                         
-    //juce::LinearInterpolator interp;
     int afterRenderOffsetCount = 0;
     int maxEventsPerBlock;
-    //std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
-    //std::optional<double> lastValue, afterRenderValue, preRenderValue;
 
 };

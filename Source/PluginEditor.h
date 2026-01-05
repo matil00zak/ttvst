@@ -31,8 +31,11 @@ private:
     // access the processor object that created it.
     PluginTestowy2AudioProcessor& audioProcessor;
     juce::ToggleButton motorButton;
+    juce::Slider pitchShiftSlider;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<ButtonAttachment> motorAttachment;
+    using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    std::unique_ptr<SliderAttachment> pitchShiftAttachment;
     juce::TextButton loadButton{ "Load File" };
     juce::TextButton clearLogButton{ "Clear Logs" };
     juce::TextEditor midiMonitor;

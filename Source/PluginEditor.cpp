@@ -52,6 +52,16 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
         motorButton
     );
 
+    addAndMakeVisible(pitchShiftSlider);
+    pitchShiftSlider.setSliderStyle(juce::Slider::LinearVertical);
+    pitchShiftAttachment = std::make_unique<SliderAttachment>(
+        audioProcessor.getAPVTS(),
+        "PitchShift",
+        pitchShiftSlider
+    );
+
+
+
     // MIDI monitor setup
     midiMonitor.setMultiLine(true);
     midiMonitor.setReadOnly(true);
@@ -88,15 +98,41 @@ void PluginTestowy2AudioProcessorEditor::resized()
 {
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
-    loadButton.setBounds(getLocalBounds().reduced(20));
-    clearLogButton.setBounds(getLocalBounds().reduced(20));
-    motorButton.setBounds(getLocalBounds().reduced(20));
-    auto area = getLocalBounds().reduced(8);
-    auto top = area.removeFromTop(36);
-    loadButton.setBounds(top.removeFromLeft(100));
-    clearLogButton.setBounds(top.removeFromLeft(200));
-    motorButton.setBounds(top.removeFromLeft(300));
-    area.removeFromTop(8);
+    //loadButton.setBounds(getLocalBounds().reduced(20));
+    //clearLogButton.setBounds(getLocalBounds().reduced(20));
+    //motorButton.setBounds(getLocalBounds().reduced(20));
+    //auto area = getLocalBounds().reduced(8);
+    //auto top = area.removeFromTop(36);
+    //loadButton.setBounds(top.removeFromLeft(100));
+    //clearLogButton.setBounds(top.removeFromLeft(200));
+    //motorButton.setBounds(top.removeFromLeft(300));
+    //area.removeFromTop(8);
+    //midiMonitor.setBounds(area);
+    //pitchShiftSlider.setBounds(top.removeFromLeft(300));
+
+    // Constants for layout
+    const int margin = 8;
+    const int buttonHeight = 36;
+    const int buttonSpacing = 10;
+    const int sliderWidth = 80; // vertical slider width
+
+    auto area = getLocalBounds().reduced(margin);
+
+    // --- Top row of buttons ---
+    auto topRow = area.removeFromTop(buttonHeight);
+
+    int buttonWidth = 100;
+    loadButton.setBounds(topRow.removeFromLeft(buttonWidth));
+    topRow.removeFromLeft(buttonSpacing);
+    clearLogButton.setBounds(topRow.removeFromLeft(buttonWidth));
+    topRow.removeFromLeft(buttonSpacing);
+    motorButton.setBounds(topRow.removeFromLeft(buttonWidth));
+
+    // --- Right side vertical slider ---
+    auto sliderArea = area.removeFromRight(sliderWidth); // take space from the right
+    pitchShiftSlider.setBounds(sliderArea);
+
+    // --- Remaining area for MIDI monitor ---
     midiMonitor.setBounds(area);
 
 }

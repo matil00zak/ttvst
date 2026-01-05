@@ -207,7 +207,7 @@ namespace ttvst::splines {
 
         int n = x.size() - 1;
         vec a;
-        DBG("joint = " << jointIdx << " n = " << n);
+        //DBG("joint = " << jointIdx << " n = " << n);
         //int idx = n - newCondIdx;
 
         a.insert(a.begin(), y.begin(), y.end());
@@ -223,7 +223,7 @@ namespace ttvst::splines {
         for (int i = 1; i < n; ++i)
             alpha.push_back(3 * (a[i + 1] - a[i]) / h[i] - 3 * (a[i] - a[i - 1]) / h[i - 1]);
         
-        DBG("alpha size = " << alpha.size());
+        //DBG("alpha size = " << alpha.size());
         vec c(n + 1);
         vec l(n + 1);
         vec mu(n + 1);
@@ -271,7 +271,7 @@ namespace ttvst::splines {
             next_condition.l =  l.back();
             next_condition.mu = mu.back();
             next_condition.z = z.back();
-            DBG("values assigned from the last spline that is the end spline - new speeds should be one");
+            //DBG("values assigned from the last spline that is the end spline - new speeds should be one");
         }
 
 

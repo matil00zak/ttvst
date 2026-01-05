@@ -101,6 +101,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
         "Motor",
         false
     ));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "PitchShift", "Pitch Shift", juce::NormalisableRange<float>(-12.0f, 12.0f, 0.01f), 0.0f));
+
     return { params.begin(), params.end() };
 }
 
@@ -274,6 +278,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     speed_offsets_ = {};
 
     const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
+    const float pitchShift = apvts.getRawParameterValue("PitchShift")->load();
 
     //Snapshot loaded data
     auto data = getLoaded(); // later check if the loading data mechanism is allocation free
@@ -284,13 +289,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const int outCh = buffer.getNumChannels();
     const int outN = buffer.getNumSamples();
     if (srcN <= 0) return;
-
-    //if (hasPitchWheelMessage(lastMidi_)) {
-    //    DBG("proessBlock: lastMIDI has msgs");
-    //}
-    //else {
-    //    DBG("processBlock: lastMIDI no msgs");
-    //}
 
 
     //IF HOST RESIZES BUFFER THEN DROP LAST BLOCK AND UPDATE LAST BLOCK SIZE
@@ -307,7 +305,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     //    afterRenderOffsetVec = {};
     //    afterRenderValueVec = {};
     //}
-    
+    //DBG(afterRenderOffsetCount);
+    //
     auto optOff = getPitchWheelOffsetsVector(midiMessages);
     auto optVal = getPitchWheelValueVector(midiMessages);
     if (optOff && optVal) {
@@ -346,9 +345,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         insertBaseSpeed(speeds_, speed_offsets_, ratioLPState);
     }
     
-    //for (auto s : speeds_) {
-    //    DBG(s);
-    //}
 
     if (speeds_.size() > 1) {
         tau = 0.04;
@@ -378,7 +374,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         lastSpline = {};
         splineCondition_.reset();
         if (motorOn) {
-            ratios_.assign(outN, 1.0);
+            
+            ratios_.assign(outN, 1.0 + (1.0 * pitchShift/12.0));
         }
         else {
             ratios_.assign(outN, 0.0);

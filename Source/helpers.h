@@ -29,6 +29,11 @@ namespace ttvst::helps
     std::optional<std::vector<double>> getPitchWheelValueVector(const juce::MidiBuffer& buffer);
 
     std::optional<std::vector<double>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer);
+    // this function writes to preallocated vectors offsets and values
+// max count is the vectors reserved size
+// base offset is the local time at which the buffers start time is percieved in the process block 
+// (for the lookahead buffer this is outN)
+    void extractPitchWheelData(const juce::MidiBuffer& buffer, int& count, double* offsets, double* values, int maxCount, double baseOffset);
 
     bool hasPitchWheelMessage(const juce::MidiBuffer& buffer);
 

@@ -111,7 +111,8 @@ private:
     bool haveLastMidi_ = false;                                                     // old functionality. 
     //bool haveLast_ = false;                                                         
     //juce::LinearInterpolator interp;
-
+    int afterRenderOffsetCount = 0;
+    int maxEventsPerBlock;
     //std::optional<int> lastOffset, afterRenderOffset, preRenderOffset;
     //std::optional<double> lastValue, afterRenderValue, preRenderValue;
 

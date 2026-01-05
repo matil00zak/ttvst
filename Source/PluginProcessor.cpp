@@ -172,6 +172,14 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+    maxEventsPerBlock = 128;
+    afterRenderOffsetVec.reserve(maxEventsPerBlock);
+    afterRenderValueVec.reserve(maxEventsPerBlock);
+    thisOffsetVec.reserve(maxEventsPerBlock);
+    thisValueVec.reserve(maxEventsPerBlock);
+    preRenderOffsetVec.reserve(maxEventsPerBlock);
+    preRenderValueVec.reserve(maxEventsPerBlock);
+
     hostSampleRate_ = sampleRate;
     playhead_ = 0.0; // reset on (re)start
     setLatencySamples(samplesPerBlock);
@@ -268,7 +276,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
 
     //Snapshot loaded data
-    auto data = getLoaded();
+    auto data = getLoaded(); // later check if the loading data mechanism is allocation free
     if (!data) return;
 
     const int srcCh = data->buffer.getNumChannels();
@@ -287,12 +295,19 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     //IF HOST RESIZES BUFFER THEN DROP LAST BLOCK AND UPDATE LAST BLOCK SIZE
     if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN) {
-        lastBlock_.setSize(outCh, outN, false, true, true);
+        lastBlock_.setSize(outCh, outN, false, true, true); // potential aloocation 
         //DBG("block resized");
         haveLastMidi_ = false;
     }
 
-    //get midi
+
+    //afterRenderOffsetCount = 0;
+    //extractPitchWheelData(midiMessages, afterRenderOffsetCount, afterRenderOffsetVec.data(), afterRenderValueVec.data(), maxEventsPerBlock, outN);
+    //if (afterRenderOffsetCount = 0) {
+    //    afterRenderOffsetVec = {};
+    //    afterRenderValueVec = {};
+    //}
+    
     auto optOff = getPitchWheelOffsetsVector(midiMessages);
     auto optVal = getPitchWheelValueVector(midiMessages);
     if (optOff && optVal) {
@@ -305,6 +320,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     else {
         afterRenderOffsetVec = {};
         afterRenderValueVec = {};
+        
     }
 
     
@@ -324,7 +340,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     ttvst::helps::vectorPairDbl speedinfo = positionsToSpeed(values_, offsets_, outN, 2);
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
-
+    
     catchSpeedOutliers(speeds_, 6.0);
     if (!splineCondition_.has_value()) {
         insertBaseSpeed(speeds_, speed_offsets_, ratioLPState);

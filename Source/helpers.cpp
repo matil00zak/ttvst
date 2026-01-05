@@ -103,6 +103,27 @@ namespace ttvst::helps {
     }
     
 
+    // this function writes to preallocated vectors offsets and values
+    // max count is the vectors reserved size
+    // base offset is the local time at which the buffers start time is percieved in the process block 
+    // (for the lookahead buffer this is outN)
+    void extractPitchWheelData(const juce::MidiBuffer& buffer, int& count, double* offsets, double* values, int maxCount, double baseOffset) {
+        for (const auto metadata : buffer) {
+
+            if (!metadata.getMessage().isPitchWheel())
+                continue;
+
+            if (count >= maxCount)
+                break;
+
+            offsets[count] = baseOffset + metadata.samplePosition;
+            values[count] = metadata.getMessage().getPitchWheelValue();
+            DBG("assigned: " << values[count] << "at: " << values[count]);
+            ++count;
+        }
+    }
+
+
     bool hasPitchWheelMessage(const juce::MidiBuffer& buffer) {
         for (auto meta : buffer) {
             if (meta.getMessage().isPitchWheel()) {
@@ -183,7 +204,7 @@ namespace ttvst::helps {
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs) {
         for (int i = 0; i < speeds.size(); i++) {
             if (speeds[i] > maxSpeedAbs) {
-                DBG("helpers::catchSpeedOutliers: outlier value = " << speeds[i]);
+                //DBG("helpers::catchSpeedOutliers: outlier value = " << speeds[i]);
                 speeds[i] = copysign(maxSpeedAbs, speeds[i]);
             }
         }
@@ -192,7 +213,7 @@ namespace ttvst::helps {
     void insertBaseSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double baseSpeed) {
         offsets.insert(offsets.begin(), 0.0);
         speeds.insert(speeds.begin(), baseSpeed);
-        DBG("helpers::insertBaseSpeed: inserted base speed = " << baseSpeed);
+        //DBG("helpers::insertBaseSpeed: inserted base speed = " << baseSpeed);
     }
 
 

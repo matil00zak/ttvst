@@ -16,6 +16,7 @@
 #include "MidiMessageManager.h"
 #include "helpers.h"
 #include "cubicSplines.h"
+#include "CascadedOnePoleLPF.h"
 
 //==============================================================================
 /**
@@ -101,5 +102,11 @@ private:
     bool haveLastMidi_ = false;                                                     // old functionality. 
     int afterRenderOffsetCount = 0;
     int maxEventsPerBlock;
+
+    //filters
+    CascadedOnePoleLPF lpfLeft;
+    CascadedOnePoleLPF lpfRight;
+    float baseCutoff = 10000.0f;
+    float filterAlpha = 0.5f;
 
 };

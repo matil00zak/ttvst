@@ -190,6 +190,11 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     tau = 0.07;
     alpha = 1.0 - std::exp(-1.0 / (sampleRate * tau));
     splineCondition_.reset();
+
+    lpfLeft.prepare(sampleRate);
+    lpfRight.prepare(sampleRate);
+    baseCutoff = 12000.0f;
+    filterAlpha = 1.0;
     
 }
 
@@ -406,6 +411,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         */
         //hermite
         //looped playback
+        float cutofff;
         for (int i = 0; i < outN; i++)
         {   
             wrapPlayhead(playhead_, srcN);
@@ -417,6 +423,14 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             const double frac = playhead_ - (double)index1;
             const double frac2 = frac * frac;
             const double frac3 = frac2 * frac;
+
+            const float speedAbs = std::abs(ratios_[i]);
+
+            const float cutoff = baseCutoff * std::pow(speedAbs, filterAlpha);
+            
+            const float cutoffClamped = juce::jlimit(50.0f, 0.45f * (float)hostSampleRate_, cutoff);
+            
+
 
             for (int ch = 0; ch < outCh; ch++)
             {
@@ -431,12 +445,21 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
                 const double a2 = -0.5 * y0 + 0.5 * y2;
                 const double a3 = y1;
 
-                const float out = (float)(a0 * frac3 + a1 * frac2 + a2 * frac + a3);
+                float out = (float)(a0 * frac3 + a1 * frac2 + a2 * frac + a3);
+
+                
+                if (ch == 0)
+                    out = lpfLeft.processSample(out, cutoffClamped);
+                else
+                    out = lpfRight.processSample(out, cutoffClamped);
+
+
                 buffer.setSample(ch, i, out);
             }
-
+            cutofff = cutoffClamped;
             playhead_ += ratios_[i];
         }
+        DBG(cutofff);
     }
     else {
         //DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");

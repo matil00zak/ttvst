@@ -29,13 +29,26 @@ public:
 private:
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
+    juce::GroupComponent controlsGroup;
+    juce::GroupComponent plateGroup;
+
     PluginTestowy2AudioProcessor& audioProcessor;
     juce::ToggleButton motorButton;
     juce::Slider pitchShiftSlider;
+    juce::Slider tauTouchSlider;
+    juce::Slider tauFreeSlider;
+    juce::ToggleButton filterButton;
+    juce::Slider filterBaseCutoffSlider;
+    juce::Slider filterAlphaSlider;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<ButtonAttachment> motorAttachment;
+    std::unique_ptr<ButtonAttachment> filterAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<SliderAttachment> pitchShiftAttachment;
+    std::unique_ptr<SliderAttachment> tauTouchAttachment;
+    std::unique_ptr<SliderAttachment> tauFreeAttachment;
+    std::unique_ptr<SliderAttachment> filterBaseCutoffAttachment;
+    std::unique_ptr<SliderAttachment> filterAlphaAttachment;
     juce::TextButton loadButton{ "Load File" };
     juce::TextButton clearLogButton{ "Clear Logs" };
     juce::TextEditor midiMonitor;

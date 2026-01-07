@@ -95,15 +95,49 @@ PluginTestowy2AudioProcessor::~PluginTestowy2AudioProcessor()
 
 juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor::createParameterLayout() {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-
+    // motor on off
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         "motorOn",
         "Motor",
         false
     ));
+    // pitch shift
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "PitchShift",
+        "Pitch Shift",
+        juce::NormalisableRange<float>(-12.0f, 12.0f, 0.01f), 0.0f)
+    );
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "PitchShift", "Pitch Shift", juce::NormalisableRange<float>(-12.0f, 12.0f, 0.01f), 0.0f));
+        "TauTouch",
+        "Tau Touch",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.04f)
+    );
+    
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "TauFree",
+        "Tau Free",
+        juce::NormalisableRange<float>(0.0f, 3.0f, 0.01f), 0.5f)
+    );
+
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "FilterOn",
+        "Filter",
+        true
+    ));
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "FilterBaseCutoff",
+        "Base Cutoff",
+        juce::NormalisableRange<float>(100.0f, 20000.0f, 100.0f), 16000.0f)
+    );
+
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "FilterAlpha",
+        "Filter Alpha",
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01), 1.0f)
+    );
+
 
     return { params.begin(), params.end() };
 }
@@ -283,7 +317,15 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     speed_offsets_ = {};
 
     const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
+    const bool filterOn = apvts.getRawParameterValue("FilterOn")->load();
     const float pitchShift = apvts.getRawParameterValue("PitchShift")->load();
+    const float tauTouch = apvts.getRawParameterValue("TauTouch")->load();
+    const float tauFree = apvts.getRawParameterValue("TauFree")->load();
+    baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
+    filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
+
+
+
 
     //Snapshot loaded data
     auto data = getLoaded(); // later check if the loading data mechanism is allocation free
@@ -352,8 +394,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     
 
     if (speeds_.size() > 1) {
-        tau = 0.04;
-        alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tau));
+        //tau = 0.04;
+        alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
         ratios_ = {};
         splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1, outN);
         splineSet_ = splineSetPlus_.set;
@@ -373,8 +415,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
     else {
         //DBG("processBlock: no messages to create vector from");
-        tau = 0.5;
-        alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tau));
+        //tau = 0.5;
+        alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
         splineSet_ = {};
         lastSpline = {};
         splineCondition_.reset();
@@ -447,11 +489,13 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
                 float out = (float)(a0 * frac3 + a1 * frac2 + a2 * frac + a3);
 
-                
-                if (ch == 0)
-                    out = lpfLeft.processSample(out, cutoffClamped);
-                else
-                    out = lpfRight.processSample(out, cutoffClamped);
+                if (filterOn) {
+                    if (ch == 0)
+                        out = lpfLeft.processSample(out, cutoffClamped);
+                    else
+                        out = lpfRight.processSample(out, cutoffClamped);
+                }
+
 
 
                 buffer.setSample(ch, i, out);

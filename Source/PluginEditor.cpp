@@ -17,7 +17,11 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
     // editor's size to whatever you need it to be.
 
  // Set the callback for when the button is clicked
+    setResizable(true, true);
+    getConstrainer()->setFixedAspectRatio(1.5);
 
+
+    
     addAndMakeVisible(loadButton);
     loadButton.onClick = [this](){
             DBG("CLICKED");
@@ -52,14 +56,59 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
         motorButton
     );
 
+    addAndMakeVisible(filterButton);
+    filterButton.setButtonText("Filter");
+    filterAttachment = std::make_unique<ButtonAttachment>(
+        audioProcessor.getAPVTS(),
+        "FilterOn",
+        filterButton
+    );
+
     addAndMakeVisible(pitchShiftSlider);
     pitchShiftSlider.setSliderStyle(juce::Slider::LinearVertical);
+    pitchShiftSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 32, 32);
     pitchShiftAttachment = std::make_unique<SliderAttachment>(
         audioProcessor.getAPVTS(),
         "PitchShift",
         pitchShiftSlider
     );
 
+
+    addAndMakeVisible(tauTouchSlider);
+    tauTouchSlider.setSliderStyle(juce::Slider::Rotary);
+    tauTouchSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 32, 32);
+    tauTouchAttachment = std::make_unique<SliderAttachment>(
+        audioProcessor.getAPVTS(),
+        "TauTouch",
+        tauTouchSlider
+    );
+
+    addAndMakeVisible(tauFreeSlider);
+    tauFreeSlider.setSliderStyle(juce::Slider::Rotary);
+    tauFreeSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 32, 32);
+    tauFreeAttachment = std::make_unique<SliderAttachment>(
+        audioProcessor.getAPVTS(),
+        "TauFree",
+        tauFreeSlider
+    );
+
+    addAndMakeVisible(filterBaseCutoffSlider);
+    filterBaseCutoffSlider.setSliderStyle(juce::Slider::Rotary);
+    filterBaseCutoffSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 32, 32);
+    filterBaseCutoffAttachment = std::make_unique<SliderAttachment>(
+        audioProcessor.getAPVTS(),
+        "FilterBaseCutoff",
+        filterBaseCutoffSlider
+    );
+
+    addAndMakeVisible(filterAlphaSlider);
+    filterAlphaSlider.setSliderStyle(juce::Slider::Rotary);
+    filterAlphaSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 32, 32);
+    filterAlphaAttachment = std::make_unique<SliderAttachment>(
+        audioProcessor.getAPVTS(),
+        "FilterAlpha",
+        filterAlphaSlider
+    );
 
 
     // MIDI monitor setup
@@ -71,10 +120,7 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
     addAndMakeVisible(midiMonitor);
     
     startTimerHz(10); // poll MIDI log ~30 FPS
-
-
-
-    setSize (400, 300);
+    setSize (600, 400);
 }
 
 PluginTestowy2AudioProcessorEditor::~PluginTestowy2AudioProcessorEditor()
@@ -86,55 +132,59 @@ PluginTestowy2AudioProcessorEditor::~PluginTestowy2AudioProcessorEditor()
 void PluginTestowy2AudioProcessorEditor::paint (juce::Graphics& g)
 {
     // (Our component is opaque, so we must completely fill the background with a solid colour)
-    g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
+    g.fillAll (juce::Colours::black.brighter(0.2));
 
-    g.setColour (juce::Colours::white);
+    g.setColour (juce::Colours::whitesmoke);
     g.setFont (juce::FontOptions (15.0f));
-    g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
-    //loadButton.setBounds(getLocalBounds().reduced(20));
 }
 
 void PluginTestowy2AudioProcessorEditor::resized()
 {
-    // This is generally where you'll want to lay out the positions of any
-    // subcomponents in your editor..
-    //loadButton.setBounds(getLocalBounds().reduced(20));
-    //clearLogButton.setBounds(getLocalBounds().reduced(20));
-    //motorButton.setBounds(getLocalBounds().reduced(20));
-    //auto area = getLocalBounds().reduced(8);
-    //auto top = area.removeFromTop(36);
-    //loadButton.setBounds(top.removeFromLeft(100));
-    //clearLogButton.setBounds(top.removeFromLeft(200));
-    //motorButton.setBounds(top.removeFromLeft(300));
-    //area.removeFromTop(8);
-    //midiMonitor.setBounds(area);
-    //pitchShiftSlider.setBounds(top.removeFromLeft(300));
+    auto area = getLocalBounds().reduced(10); // margin around edges
 
-    // Constants for layout
-    const int margin = 8;
-    const int buttonHeight = 36;
-    const int buttonSpacing = 10;
-    const int sliderWidth = 80; // vertical slider width
+    // Reserve bottom area for MIDI monitor
+    int midiHeight = 80;
+    auto midiArea = area.removeFromBottom(midiHeight);
+    midiMonitor.setBounds(midiArea);
 
-    auto area = getLocalBounds().reduced(margin);
+    // Top row: buttons (load, clear, motor, filter)
+    int buttonHeight = 30;
+    int buttonSpacing = 10;
+    auto buttonArea = area.removeFromTop(buttonHeight);
 
-    // --- Top row of buttons ---
-    auto topRow = area.removeFromTop(buttonHeight);
+    int buttonWidth = (buttonArea.getWidth() - 3 * buttonSpacing) / 4; // 4 buttons
 
-    int buttonWidth = 100;
-    loadButton.setBounds(topRow.removeFromLeft(buttonWidth));
-    topRow.removeFromLeft(buttonSpacing);
-    clearLogButton.setBounds(topRow.removeFromLeft(buttonWidth));
-    topRow.removeFromLeft(buttonSpacing);
-    motorButton.setBounds(topRow.removeFromLeft(buttonWidth));
+    loadButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
+    buttonArea.removeFromLeft(buttonSpacing);
+    clearLogButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
+    buttonArea.removeFromLeft(buttonSpacing);
+    motorButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
+    buttonArea.removeFromLeft(buttonSpacing);
+    filterButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
 
-    // --- Right side vertical slider ---
-    auto sliderArea = area.removeFromRight(sliderWidth); // take space from the right
-    pitchShiftSlider.setBounds(sliderArea);
+    // Sliders row: evenly spaced horizontally in remaining area
+    int sliderCount = 5; // pitchShift, tauTouch, tauFree, filterBaseCutoff, filterAlpha
+    int sliderSpacing = 20;
+    int sliderWidth = (area.getWidth() - sliderSpacing * (sliderCount - 1)) / sliderCount;
+    int sliderHeight = sliderWidth; // square sliders for rotary style
+    int topY = area.getY() + (area.getHeight() - sliderHeight) / 2; // vertically centered
 
-    // --- Remaining area for MIDI monitor ---
-    midiMonitor.setBounds(area);
+    pitchShiftSlider.setBounds(0, 0, 0, 0); // just to avoid warnings
+    tauTouchSlider.setBounds(0, 0, 0, 0);
+    tauFreeSlider.setBounds(0, 0, 0, 0);
+    filterBaseCutoffSlider.setBounds(0, 0, 0, 0);
+    filterAlphaSlider.setBounds(0, 0, 0, 0);
 
+    int x = area.getX();
+    pitchShiftSlider.setBounds(x, topY, sliderWidth, sliderHeight);
+    x += sliderWidth + sliderSpacing;
+    tauTouchSlider.setBounds(x, topY, sliderWidth, sliderHeight);
+    x += sliderWidth + sliderSpacing;
+    tauFreeSlider.setBounds(x, topY, sliderWidth, sliderHeight);
+    x += sliderWidth + sliderSpacing;
+    filterBaseCutoffSlider.setBounds(x, topY, sliderWidth, sliderHeight);
+    x += sliderWidth + sliderSpacing;
+    filterAlphaSlider.setBounds(x, topY, sliderWidth, sliderHeight);
 }
 
  void PluginTestowy2AudioProcessorEditor::timerCallback()

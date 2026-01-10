@@ -11,7 +11,8 @@
 
 //==============================================================================
 PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTestowy2AudioProcessor& p)
-    : AudioProcessorEditor (&p), audioProcessor (p)
+    : AudioProcessorEditor (&p),
+    audioProcessor (p)
 {
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
@@ -37,9 +38,10 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
                 {
                     auto file = fc.getResult();
                     if (file.existsAsFile())
-                        audioProcessor.beginLoadFile(file); // Twój stub/loader
+                        audioProcessor.beginLoadFile(file);
+                    thumbnail.setSource(new juce::FileInputSource(file));
 
-                    fileChooser.reset(); // posprz¹taj po dialogu
+                    fileChooser.reset();
                 });
         };
 
@@ -76,7 +78,7 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
 
     addAndMakeVisible(tauTouchSlider);
     tauTouchSlider.setSliderStyle(juce::Slider::Rotary);
-    tauTouchSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 32, 32);
+    tauTouchSlider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 50, 32);
     tauTouchAttachment = std::make_unique<SliderAttachment>(
         audioProcessor.getAPVTS(),
         "TauTouch",
@@ -119,8 +121,10 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
     midiMonitor.setFont(juce::FontOptions(13.0f));
     addAndMakeVisible(midiMonitor);
     
-    startTimerHz(10); // poll MIDI log ~30 FPS
+    startTimerHz(60); // poll MIDI log ~30 FPS
     setSize (600, 400);
+
+    thumbnailFormatManager.registerBasicFormats();
 }
 
 PluginTestowy2AudioProcessorEditor::~PluginTestowy2AudioProcessorEditor()
@@ -136,11 +140,47 @@ void PluginTestowy2AudioProcessorEditor::paint (juce::Graphics& g)
 
     g.setColour (juce::Colours::whitesmoke);
     g.setFont (juce::FontOptions (15.0f));
+
+    constexpr double visibleWindowSecons = 0.5;
+
+    const double visualLatencySeconds = processor.getBlockSize() / processor.getSampleRate();
+
+    if (thumbnail.getNumChannels() > 0)
+    {
+        double playhead = audioProcessor.getPlayheadSeconds();
+        playhead -= visualLatencySeconds;
+        const double halfWindow = visibleWindowSeconds * 0.5;
+
+        double startTime = playhead - halfWindow;
+        double endTime = playhead + halfWindow;
+
+        startTime = juce::jlimit(0.0, thumbnail.getTotalLength(), startTime);
+        endTime = juce::jlimit(0.0, thumbnail.getTotalLength(), endTime);
+
+        // Background
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRect(waveformArea);
+
+        // Waveform (scrolls)
+        g.setColour(juce::Colours::whitesmoke);
+        thumbnail.drawChannels(g, waveformArea, startTime, endTime, 1.0f);
+
+        // Fixed center playhead
+        const int playheadX = waveformArea.getX() + waveformArea.getWidth() / 2;
+
+        g.setColour(juce::Colours::red);
+        g.fillRect(playheadX - 1,
+            waveformArea.getY(),
+            2,
+            waveformArea.getHeight());
+    }
 }
 
 void PluginTestowy2AudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(10); // margin around edges
+
+    waveformArea = area.removeFromTop(100);
 
     // Reserve bottom area for MIDI monitor
     int midiHeight = 80;
@@ -189,20 +229,22 @@ void PluginTestowy2AudioProcessorEditor::resized()
 
  void PluginTestowy2AudioProcessorEditor::timerCallback()
  {
-    std::vector<ttvst::MidiEvent> events;
-    audioProcessor.getMidiLog().drainTo(events);
-    
-    if (events.empty()) return;
-    
-    // Append new lines to our fixed-size buffer
-    for (const auto& e : events)
-        midiLines.add(e.toString());
-    
-    // Trim to last kMaxLines
-    if (midiLines.size() > kMaxLines)
-        midiLines.removeRange(0, midiLines.size() - kMaxLines);
-    
-    // Re-render (small list, so full rewrite is fine)
-    midiMonitor.setText(midiLines.joinIntoString("\n"), false);
-    midiMonitor.moveCaretToEnd();
+
+    repaint();
+    //std::vector<ttvst::MidiEvent> events;
+    //audioProcessor.getMidiLog().drainTo(events);
+    //
+    //if (events.empty()) return;
+    //
+    //// Append new lines to our fixed-size buffer
+    //for (const auto& e : events)
+    //    midiLines.add(e.toString());
+    //
+    //// Trim to last kMaxLines
+    //if (midiLines.size() > kMaxLines)
+    //    midiLines.removeRange(0, midiLines.size() - kMaxLines);
+    //
+    //// Re-render (small list, so full rewrite is fine)
+    //midiMonitor.setText(midiLines.joinIntoString("\n"), false);
+    //midiMonitor.moveCaretToEnd();
  }

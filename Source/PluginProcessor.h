@@ -32,6 +32,7 @@ public:
     ~PluginTestowy2AudioProcessor() override;
     void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha);
 
+    double getPlayheadSeconds() const;
 
     ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
@@ -85,6 +86,8 @@ private:
     ttvst::MidiMessageManager midiLog_;                                             // logs container
     std::vector<double> offsets_, values_;                                          // contains all avilable msgs data, just storage, dbg
     std::vector<double> speeds_, speed_offsets_, ratios_;                           // crucial very important data, base for generation
+    double lastSpeed, lastOffset;                                                   // data for the empty buffers // patches MIDI stream interruption
+    int emptyBuffersCount;
     double hostSampleRate_;
     double playhead_ = 0.0;                                                         // the playhead position
     std::vector<double> thisValueVec, afterRenderValueVec, preRenderValueVec;       // message data stream containers
@@ -94,7 +97,7 @@ private:
     ttvst::splines::splineSet lastSpline;                                           // last spline container - completes the spline set
     double ratioLPState = 0.0;                                                      // speed inertia base // speed inertia container
     double tau, alpha;
-    std::atomic<int> debugEvent{ 0 };
+    //std::atomic<int> debugEvent{ 0 };
     // inertia parameters
 
     juce::AudioBuffer<float> lastBlock_;                                            // should be used to detect buffer size change. to do.
@@ -108,6 +111,8 @@ private:
     CascadedOnePoleLPF lpfRight;
     float baseCutoff = 10000.0f;
     float filterAlpha = 0.5f;
+
+    juce::AudioFormatManager formatManager;
 
 };
 

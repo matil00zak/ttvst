@@ -86,6 +86,7 @@ PluginTestowy2AudioProcessor::PluginTestowy2AudioProcessor()
     )
     , apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
+    formatManager.registerBasicFormats();
 }
 
 
@@ -111,7 +112,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "TauTouch",
         "Tau Touch",
-        juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.04f)
+        juce::NormalisableRange<float>(0.0f, 0.2f, 0.001f), 0.04f)
     );
     
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -296,6 +297,11 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
         }).detach();
 }
 
+double PluginTestowy2AudioProcessor::getPlayheadSeconds() const {
+    return playhead_ / getSampleRate();
+}
+
+
 void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     using namespace ttvst::helps;
@@ -362,10 +368,14 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         std::vector<double >values = pitchWheelToSamplePositionVec(*optVal);
         afterRenderOffsetVec = ofs;
         afterRenderValueVec = values;
+        emptyBuffersCount = 0;
     }
     else {
         afterRenderOffsetVec = {};
         afterRenderValueVec = {};
+        emptyBuffersCount++;
+        DBG("buffer empty");
+        //count empty buffers
         
     }
 
@@ -387,11 +397,23 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
     
+
+
     catchSpeedOutliers(speeds_, 6.0);
+
+    // if the interpolation stream just starts, insert the last generated speed (form smoothed speed)
     if (!splineCondition_.has_value()) {
         insertBaseSpeed(speeds_, speed_offsets_, ratioLPState);
     }
-    
+    //else if (emptyBuffersCount < 3) {
+    //    insertLastSpeed(speeds_, speed_offsets_, lastSpeed, lastOffset, outN);
+    //}
+    // else
+    // if the stram gets interrupted (splineCondition.has_value() && emptyBufferCount < 3)
+    // insert last speed (or a prediction)
+    // then if emptyBufferCount == 2 do nothing --> no spline condition will be generated ->> free state, motor steering
+    // lastSpeed --> must be in the next msg --> offset > outN
+    // 
 
     if (speeds_.size() > 1) {
         //tau = 0.04;
@@ -503,7 +525,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             cutofff = cutoffClamped;
             playhead_ += ratios_[i];
         }
-        DBG(cutofff);
+        
     }
     else {
         //DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");

@@ -52,9 +52,15 @@ private:
     juce::TextButton loadButton{ "Load File" };
     juce::TextButton clearLogButton{ "Clear Logs" };
     juce::TextEditor midiMonitor;
+    juce::Rectangle<int> waveformArea;
     // Keep only a fixed number of recent lines to avoid UI slowdown
     juce::StringArray midiLines;
     static constexpr int kMaxLines = 100; // tweak as you like
     std::unique_ptr<juce::FileChooser> fileChooser;
+    double visibleWindowSeconds = 0.5;
+    juce::AudioFormatManager thumbnailFormatManager;
+    juce::AudioThumbnailCache thumbnailCache{ 5 };
+    juce::AudioThumbnail thumbnail{16, thumbnailFormatManager, thumbnailCache};
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginTestowy2AudioProcessorEditor)
 };

@@ -54,6 +54,9 @@ namespace ttvst::helps
 
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs);
     void insertBaseSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double baseSpeed);
+    void insertLastSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double& lastSpeed, double& lastOffset, int outN);
+
+    
 
     void wrapPlayhead(double& playhead, long srcLength);
 } // namespace ttvst::midi

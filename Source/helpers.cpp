@@ -74,8 +74,9 @@ namespace ttvst::helps {
             if (!m.isPitchWheel()) continue;
             int value = m.getPitchWheelValue();
             values.push_back(value);
-            //DBG("values in this buffer: " << values.size());
+            //DBG("values in this buffer: " << value);
         }
+        //DBG("values in this buffer: " << values.size());
         if (values.empty()) {
             return std::nullopt;
             //DBG("No pitch wheel messages in this buffer");
@@ -89,12 +90,14 @@ namespace ttvst::helps {
             return std::nullopt;
             //DBG("No messages in this buffer");
         }
+        int count = 0;
         for (const auto metadata : buffer) {
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
             offsets.push_back(metadata.samplePosition);
-            //DBG("helpers::offsetsVector: offsets in this buffer: " << offsets.size());
+            count++;
         }
+        DBG("helpers::offsetsVector: messages in this buffer: " << count);
         if (offsets.empty()) {
             return std::nullopt;
             //DBG("No pitch wheel messages in this buffer");
@@ -217,7 +220,12 @@ namespace ttvst::helps {
     }
 
 
-
+    void insertLastSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double& lastSpeed, double& lastOffset, int outN) {
+        if (lastOffset >= outN) {
+            offsets.push_back(lastOffset);
+            speeds.push_back(lastSpeed);
+        }
+    }
 
 
     void wrapPlayhead(double& playhead, long srcLength) {

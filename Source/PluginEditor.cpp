@@ -231,20 +231,20 @@ void PluginTestowy2AudioProcessorEditor::resized()
  {
 
     repaint();
-    //std::vector<ttvst::MidiEvent> events;
-    //audioProcessor.getMidiLog().drainTo(events);
-    //
-    //if (events.empty()) return;
-    //
-    //// Append new lines to our fixed-size buffer
-    //for (const auto& e : events)
-    //    midiLines.add(e.toString());
-    //
-    //// Trim to last kMaxLines
-    //if (midiLines.size() > kMaxLines)
-    //    midiLines.removeRange(0, midiLines.size() - kMaxLines);
-    //
-    //// Re-render (small list, so full rewrite is fine)
-    //midiMonitor.setText(midiLines.joinIntoString("\n"), false);
-    //midiMonitor.moveCaretToEnd();
+    std::vector<ttvst::MidiEvent> events;
+    audioProcessor.getMidiLog().drainTo(events);
+    
+    if (events.empty()) return;
+    
+    // Append new lines to our fixed-size buffer
+    for (const auto& e : events)
+        midiLines.add(e.toString());
+    
+    // Trim to last kMaxLines
+    if (midiLines.size() > kMaxLines)
+        midiLines.removeRange(0, midiLines.size() - kMaxLines);
+    
+    // Re-render (small list, so full rewrite is fine)
+    midiMonitor.setText(midiLines.joinIntoString("\n"), false);
+    midiMonitor.moveCaretToEnd();
  }

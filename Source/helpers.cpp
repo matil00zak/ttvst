@@ -44,7 +44,7 @@ namespace ttvst::helps {
         pairVector messages;
         if (buffer.isEmpty()) {
             return std::nullopt;
-            DBG("No messages in this buffer");
+            //DBG("No messages in this buffer");
         }
         for (const auto metadata : buffer) {
             const auto& m = metadata.getMessage();
@@ -53,11 +53,11 @@ namespace ttvst::helps {
             const int val = m.getPitchWheelValue();
             intPair msg = { offset, val };
             messages.push_back(msg);
-            DBG("helpers::pairVec: midi messages in this buffer: " << messages.size());
+            //DBG("helpers::pairVec: midi messages in this buffer: " << messages.size());
         }
         if (messages.empty()) {
             return std::nullopt;
-            DBG("No pitch wheel messages in this buffer");
+            //DBG("No pitch wheel messages in this buffer");
         }
         return messages;
         
@@ -97,7 +97,7 @@ namespace ttvst::helps {
             offsets.push_back(metadata.samplePosition);
             count++;
         }
-        DBG("helpers::offsetsVector: messages in this buffer: " << count);
+        //DBG("helpers::offsetsVector: messages in this buffer: " << count);
         if (offsets.empty()) {
             return std::nullopt;
             //DBG("No pitch wheel messages in this buffer");
@@ -121,7 +121,7 @@ namespace ttvst::helps {
 
             offsets[count] = baseOffset + metadata.samplePosition;
             values[count] = metadata.getMessage().getPitchWheelValue();
-            DBG("assigned: " << values[count] << "at: " << values[count]);
+            //DBG("assigned: " << values[count] << "at: " << values[count]);
             ++count;
         }
     }
@@ -137,17 +137,13 @@ namespace ttvst::helps {
     }
 
     std::vector<double> pitchWheelToSamplePositionVec(std::vector<double> values) {
-        if (!values.empty()) {
             std::for_each(values.begin(), values.end(), [](double& n) {
                 n = (n / 16383.0) * 2.0 * 48000.0;
                 });
             return values;
         }
-        else {
-            //DBG("pitchToSample: values are empty");
-        }
 
-    }
+    
 
     double pitchWheelToSamplePosition(const double value) {
         return (value / 16383.0) * 2.0 * 48000.0;

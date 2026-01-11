@@ -114,6 +114,10 @@ private:
 
     juce::AudioFormatManager formatManager;
 
+
+    int midiDropoutToleranceBlocks_ = 2;
+    double lastGoodRatio_ = 1.0;
+
 };
 
 

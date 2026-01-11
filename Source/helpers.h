@@ -37,7 +37,7 @@ namespace ttvst::helps
 
     bool hasPitchWheelMessage(const juce::MidiBuffer& buffer);
 
-    std::vector<double> pitchWheelToSamplePositionVec(const std::vector<double>);
+    std::vector<double> pitchWheelToSamplePositionVec(std::vector<double> values);
 
     double pitchWheelToSamplePosition(const double);
 

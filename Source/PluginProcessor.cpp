@@ -362,6 +362,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     //
     auto optOff = getPitchWheelOffsetsVector(midiMessages);
     auto optVal = getPitchWheelValueVector(midiMessages);
+    const bool havePitchThisBlock = (optOff && optVal);
+
     if (optOff && optVal) {
         auto ofs = optOff.value();
         std::transform(ofs.begin(), ofs.end(), ofs.begin(), [outN](float val) { return val + outN; });
@@ -374,7 +376,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         afterRenderOffsetVec = {};
         afterRenderValueVec = {};
         emptyBuffersCount++;
-        DBG("buffer empty");
+        //DBG("buffer empty");
         //count empty buffers
         
     }
@@ -393,10 +395,34 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     // version with calculating speed between messages, needed only one message from lookahead 
     // also a last current-lookahead shared spline is needed to generate full buffer
 
+
+
+    const bool streamWasActive = splineCondition_.has_value(); // wczeœniej by³ ci¹g do interpolacji
+
+    //// jeœli brak pitch w tym bloku, a wczeœniej stream dzia³a³: patchuj values_
+    //if (emptyBuffersCount > 0 && emptyBuffersCount <= midiDropoutToleranceBlocks_ && streamWasActive)
+    //{
+    //    //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
+    //    //ratios_.assign(outN, ratioLPState);   // sample&hold ostatniej prêdkoœci
+    //    // NIE resetuj splineCondition_, lastSpline, splineSet_
+    //    //DBG("patched empty buffer no " << emptyBuffersCount);
+    //    double last_delta_t = offsets_[offsets_.size() - 1] - offsets_[offsets_.size() - 2];
+    //    double last_delta_pos = values_[values_.size() - 1] - values_[values_.size() - 2];
+    //    double last_speed = last_delta_pos / last_delta_t;
+    //    double delta_t = outN - offsets_[offsets_.size() - 1];
+    //    double synthetic_pos = values_[values_.size() - 1] + delta_t * last_speed;
+    //    afterRenderOffsetVec.push_back(outN);
+    //    afterRenderValueVec.push_back(synthetic_pos);
+    //    values_.push_back(synthetic_pos);
+    //    offsets_.push_back(outN);
+    //    DBG("inserted speed");
+    //}
+
+
     ttvst::helps::vectorPairDbl speedinfo = positionsToSpeed(values_, offsets_, outN, 2);
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
-    
+
 
 
     catchSpeedOutliers(speeds_, 6.0);
@@ -433,7 +459,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
         ratios_ = createSpeedVector(splineSet_, outN);
         //DBG("ratios size: " << ratios_.size());
-        
+
     }
     else {
         //DBG("processBlock: no messages to create vector from");
@@ -443,15 +469,14 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         lastSpline = {};
         splineCondition_.reset();
         if (motorOn) {
-            
-            ratios_.assign(outN, 1.0 + (1.0 * pitchShift/12.0));
+
+            ratios_.assign(outN, 1.0 + (1.0 * pitchShift / 12.0));
         }
         else {
             ratios_.assign(outN, 0.0);
         }
-        
-        
     }
+    
 
 
     if (ratios_.size() == outN) {

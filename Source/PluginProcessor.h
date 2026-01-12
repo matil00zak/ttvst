@@ -30,6 +30,7 @@ public:
     //==============================================================================
     PluginTestowy2AudioProcessor();
     ~PluginTestowy2AudioProcessor() override;
+    void PluginTestowy2AudioProcessor::smoothRatiosS(std::vector<double>& ratios, double alpha);
     void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha);
 
     double getPlayheadSeconds() const;
@@ -95,7 +96,8 @@ private:
     std::vector<ttvst::splines::splineSet> splineSet_;  // deleted: lastSplines     // set of splines (generated every iteration)
     std::optional<ttvst::splines::splineCondition> splineCondition_;                // condition passed between spline set generation
     ttvst::splines::splineSet lastSpline;                                           // last spline container - completes the spline set
-    double ratioLPState = 0.0;                                                      // speed inertia base // speed inertia container
+    double ratioLPState = 0.0; 
+    double ratioLPStateStage1_ = 0.0;// speed inertia base // speed inertia container
     double tau, alpha;
     //std::atomic<int> debugEvent{ 0 };
     // inertia parameters
@@ -111,6 +113,12 @@ private:
     CascadedOnePoleLPF lpfRight;
     float baseCutoff = 10000.0f;
     float filterAlpha = 0.5f;
+
+    bool  touchDown_ = false;       // CC64 >=64
+    int   pitchEmptyStreak_ = 0;    // kolejne bloki bez pitch wheel
+    double lastGoodSpeed_ = 0.0;    // ostatnia sensowna prêdkoœæ (ratio)
+
+    double playheadOnTouchdown_;
 
     juce::AudioFormatManager formatManager;
 

@@ -24,11 +24,34 @@ struct Seg { int offset = 0; int value  = 0; };
 
 
 
-void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha)
+void PluginTestowy2AudioProcessor::smoothRatiosS(std::vector<double>& ratios, double alpha)
 {
     for (auto& r : ratios)
     {
         ratioLPState += alpha * (r - ratioLPState);
+        r = ratioLPState;
+    }
+}
+
+void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha)
+{
+    // alpha w [0,1]
+    if (alpha < 0.0) alpha = 0.0;
+    if (alpha > 1.0) alpha = 1.0;
+
+    // Mapowanie alpha -> alpha_stages tak, ¿eby „sumaryczna” dynamika
+    // by³a zbli¿ona do filtra 1-rzêdu przy tym samym alpha.
+    // (1 - a_stage)^2 = (1 - alpha)  => a_stage = 1 - sqrt(1 - alpha)
+    const double a = 1.0 - std::sqrt(1.0 - alpha);
+
+    for (auto& r : ratios)
+    {
+        // Stopieñ 1
+        ratioLPStateStage1_ += a * (r - ratioLPStateStage1_);
+
+        // Stopieñ 2 (u¿ywamy istniej¹cego ratioLPState jako finalnego wyjœcia)
+        ratioLPState += a * (ratioLPStateStage1_ - ratioLPState);
+
         r = ratioLPState;
     }
 }
@@ -230,7 +253,8 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     lpfRight.prepare(sampleRate);
     baseCutoff = 12000.0f;
     filterAlpha = 1.0;
-    
+    ratioLPStateStage1_ = 0.0;
+    ratioLPState = 0.0;
 }
 
 void PluginTestowy2AudioProcessor::releaseResources()
@@ -315,6 +339,24 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition);
 
+
+    //capture touchdown state
+    for (const auto meta : midiMessages)
+    {
+        const auto& m = meta.getMessage();
+        if (m.isController() && m.getControllerNumber() == 64) {
+            touchDown_ = (m.getControllerValue() >= 64);
+            if (touchDown_) {
+                playheadOnTouchdown_ = playhead_;
+            }
+            if (!touchDown_) {
+                playhead_ = playheadOnTouchdown_;
+            }
+        }
+        
+    }
+
+
     buffer.clear();
     offsets_ = {};
     values_ = {};
@@ -330,7 +372,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
     filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
 
-
+    const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 12.0)) : 0.0;
 
 
     //Snapshot loaded data
@@ -351,15 +393,10 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         haveLastMidi_ = false;
     }
 
+    if (touchDown_) {
+        playheadOnTouchdown_ += outN * motorSpeed;
+    }
 
-    //afterRenderOffsetCount = 0;
-    //extractPitchWheelData(midiMessages, afterRenderOffsetCount, afterRenderOffsetVec.data(), afterRenderValueVec.data(), maxEventsPerBlock, outN);
-    //if (afterRenderOffsetCount = 0) {
-    //    afterRenderOffsetVec = {};
-    //    afterRenderValueVec = {};
-    //}
-    //DBG(afterRenderOffsetCount);
-    //
     auto optOff = getPitchWheelOffsetsVector(midiMessages);
     auto optVal = getPitchWheelValueVector(midiMessages);
     if (optOff && optVal) {
@@ -368,12 +405,12 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         std::vector<double >values = pitchWheelToSamplePositionVec(*optVal);
         afterRenderOffsetVec = ofs;
         afterRenderValueVec = values;
-        emptyBuffersCount = 0;
+        pitchEmptyStreak_ = 0;
     }
     else {
         afterRenderOffsetVec = {};
         afterRenderValueVec = {};
-        emptyBuffersCount++;
+        pitchEmptyStreak_++;
         DBG("buffer empty");
         //count empty buffers
         
@@ -405,24 +442,15 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     if (!splineCondition_.has_value()) {
         insertBaseSpeed(speeds_, speed_offsets_, ratioLPState);
     }
-    //else if (emptyBuffersCount < 3) {
-    //    insertLastSpeed(speeds_, speed_offsets_, lastSpeed, lastOffset, outN);
-    //}
-    // else
-    // if the stram gets interrupted (splineCondition.has_value() && emptyBufferCount < 3)
-    // insert last speed (or a prediction)
-    // then if emptyBufferCount == 2 do nothing --> no spline condition will be generated ->> free state, motor steering
-    // lastSpeed --> must be in the next msg --> offset > outN
-    // 
+
 
     if (speeds_.size() > 1) {
-        //tau = 0.04;
+
         alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
         ratios_ = {};
         splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1, outN);
         splineSet_ = splineSetPlus_.set;
         splineCondition_ = splineSetPlus_.spline_condition;
-        //DBG("alpha: " << splineCondition_->alpha);
 
         if (lastSpline.x < 0) {
             splineSet_.insert(splineSet_.begin(), lastSpline);
@@ -432,49 +460,47 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         lastSpline.x = lastSpline.x - outN;
 
         ratios_ = createSpeedVector(splineSet_, outN);
-        //DBG("ratios size: " << ratios_.size());
         
     }
-    else {
-        //DBG("processBlock: no messages to create vector from");
-        //tau = 0.5;
-        alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
-        splineSet_ = {};
-        lastSpline = {};
-        splineCondition_.reset();
-        if (motorOn) {
-            
-            ratios_.assign(outN, 1.0 + (1.0 * pitchShift/12.0));
+    else
+    {
+        // ---- GAP/FAILSAFE ----
+        if (pitchEmptyStreak_ == 1)
+        {
+            // 1 pusty blok PB: podtrzymaj ostatni¹ prêdkoœæ, NIE resetuj splineCondition_
+            alpha = 1.0 - std::exp(-1.0 / hostSampleRate_ * 0.7);
+            ratios_.assign(outN, motorSpeed);
         }
-        else {
+        else if (pitchEmptyStreak_ >= 2 && touchDown_)
+        {
+            // d³u¿sza przerwa + touch: hamuj do 0
+            alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
             ratios_.assign(outN, 0.0);
+
+            splineSet_ = {};
+            lastSpline = {};
+            splineCondition_.reset();
         }
-        
-        
+        else
+        {
+            // d³u¿sza przerwa + brak touch: wróæ do motorSpeed
+            alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
+            ratios_.assign(outN, motorSpeed);
+
+            splineSet_ = {};
+            lastSpline = {};
+            splineCondition_.reset();
+            //playhead_ = playheadOnTouchdown_;
+        }
     }
 
 
     if (ratios_.size() == outN) {
-        //smoothing only here
+
         smoothRatios(ratios_, alpha);
-        //append_vector_csv("ratios_smo_2048_006.csv", ratios_, 6);
-        //linear
-        /*
-        for (int i = 0; i < outN; i++) {
-            auto index0 = (unsigned long)playhead_;
-            auto index1 = index0 == (srcN - 1) ? (unsigned int)0 : index0 + 1;
-            auto frac = playhead_ - (double)index0;
-            for (int ch = 0; ch < outCh; ch++) {
-                auto value0 = *data->buffer.getReadPointer(ch, index0);
-                auto value1 = *data->buffer.getReadPointer(ch, index1);
-                auto currentSample = value0 + frac * (value1 - value0);
-                buffer.setSample(ch, i, (float)currentSample);
-            }
-            playhead_ += ratios_[i];
-        }
-        */
-        //hermite
-        //looped playback
+        //append_vector_csv("ratios_smo_1201_1.csv", ratios_, 6);
+        if (!ratios_.empty() && std::isfinite(ratios_.back()))
+            lastGoodSpeed_ = ratios_.back();
         float cutofff;
         for (int i = 0; i < outN; i++)
         {   

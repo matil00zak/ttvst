@@ -26,9 +26,9 @@ namespace ttvst::helps
 
     std::optional<ttvst::helps::pairVector> getPitchWheelMsgPairVec(const juce::MidiBuffer& buffer);
 
-    std::optional<std::vector<double>> getPitchWheelValueVector(const juce::MidiBuffer& buffer);
+    std::optional<std::vector<double>> getPitchWheelValueVector(const juce::MidiBuffer& buffer, int maxMessages);
 
-    std::optional<std::vector<double>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer);
+    std::optional<std::vector<double>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer, int maxMessages);
     // this function writes to preallocated vectors offsets and values
 // max count is the vectors reserved size
 // base offset is the local time at which the buffers start time is percieved in the process block 
@@ -51,7 +51,7 @@ namespace ttvst::helps
     //spline saved from previous iteration 
     // is meant to be used with last generated spline to complete the current buffer on its beggining
     vectorPairDbl positionsToSpeed(std::vector<double> positions, std::vector<double> offsets, int outN, int lookahead);
-
+    vectorPairDbl positionsToSpeedWrapped(std::vector<double> positions, std::vector<double> offsets, int outN, int lookahead);
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs);
     void insertBaseSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double baseSpeed);
     void insertLastSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double& lastSpeed, double& lastOffset, int outN);

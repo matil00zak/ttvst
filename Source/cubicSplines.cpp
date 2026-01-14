@@ -121,6 +121,10 @@ namespace ttvst::splines {
     }
 
 
+
+
+
+
     std::vector<splineSet> spline(vec& x, vec& y) {
         // must have at least two points and same length
         if (x.size() <= 1 || y.size() <= 1 || x.size() != y.size()) {

@@ -63,17 +63,21 @@ namespace ttvst::helps {
         
     }
 
-    std::optional<std::vector<double>> getPitchWheelValueVector(const juce::MidiBuffer& buffer) {
+    std::optional<std::vector<double>> getPitchWheelValueVector(const juce::MidiBuffer& buffer, int maxMessages) {
         std::vector<double> values;
         if (buffer.isEmpty()) {
             return std::nullopt;
             //DBG("No messages in this buffer");
         }
+        int count = 0;
         for (const auto metadata : buffer) {
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
             int value = m.getPitchWheelValue();
             values.push_back(value);
+            count++;
+            if (count == maxMessages)
+                break;
             //DBG("values in this buffer: " << value);
         }
         //DBG("values in this buffer: " << values.size());
@@ -84,7 +88,7 @@ namespace ttvst::helps {
         return values;
     }
 
-    std::optional<std::vector<double>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer) {
+    std::optional<std::vector<double>> getPitchWheelOffsetsVector(const juce::MidiBuffer& buffer, int maxMessages) {
         std::vector<double> offsets;
         if (buffer.isEmpty()) {
             return std::nullopt;
@@ -94,10 +98,14 @@ namespace ttvst::helps {
         for (const auto metadata : buffer) {
             const auto& m = metadata.getMessage();
             if (!m.isPitchWheel()) continue;
-            offsets.push_back(metadata.samplePosition);
+            //offsets.push_back(metadata.samplePosition);
+            offsets.push_back(1023);
             count++;
+            if (count == maxMessages)
+                break;
+
         }
-        DBG("helpers::offsetsVector: messages in this buffer: " << count);
+        //DBG("helpers::offsetsVector: messages in this buffer: " << count);
         if (offsets.empty()) {
             return std::nullopt;
             //DBG("No pitch wheel messages in this buffer");
@@ -184,10 +192,10 @@ namespace ttvst::helps {
         std::vector<double> speeds;
         std::vector<double> speed_offsets;
         int next = 0;
-        double last_offset = 0;
+        //double last_offset = 0;
         if (offsets.size() > 1) {
             for (int i = 0; i < offsets.size() - 1; i++) {
-                if (offsets[i + 1] > 0 && next < lookahead) {
+                if (offsets[i + 1] >= 0 && next < lookahead) {
                     double delta_t = offsets[i + 1] - offsets[i];
                     double delta_pos = values[i + 1] - values[i];
                     double speed = delta_pos / delta_t;
@@ -202,6 +210,54 @@ namespace ttvst::helps {
         }
         return { speeds, speed_offsets };
     }
+
+
+    static inline double wrappedDelta(double prev, double next, double wrap)
+    {
+        double d = next - prev;
+        const double half = wrap * 0.5;
+        if (d > half) d -= wrap;
+        if (d < -half) d += wrap;
+        return d;
+        DBG("delta:%d", d);
+    }
+
+    vectorPairDbl positionsToSpeedWrapped(std::vector<double> values,
+        std::vector<double> offsets,
+        int outN,
+        int lookahead)
+    {
+        std::vector<double> speeds;
+        std::vector<double> speed_offsets;
+        int nextCount = 0;
+
+        // set this to your wrap size:
+        // - for MIDI pitch bend 14-bit: 16384 (values 0..16383)
+        constexpr double WRAP = 16384.0;
+
+        if (offsets.size() > 1 && values.size() > 1) {
+            const size_t n = std::min(values.size(), offsets.size());
+
+            for (size_t i = 0; i + 1 < n; i++) {
+                if (offsets[i + 1] >= 0 && nextCount < lookahead) {
+                    double delta_t = offsets[i + 1] - offsets[i];
+                    if (delta_t == 0.0) continue; // avoid inf/NaN
+
+                    double delta_pos = wrappedDelta(values[i], values[i + 1], WRAP);
+                    double speed = delta_pos / delta_t;
+
+                    speed_offsets.push_back(offsets[i + 1]);
+                    speeds.push_back(speed);
+
+                    if (offsets[i + 1] > outN) { nextCount += 1; }
+                }
+            }
+            return { speeds, speed_offsets };
+        }
+
+        return { {}, {} };
+    }
+
 
 
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs) {

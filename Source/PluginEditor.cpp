@@ -58,6 +58,14 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
         motorButton
     );
 
+    addAndMakeVisible(tempoModeButton);
+    tempoModeButton.setButtonText("Tempo Mode");
+    tempoModeAttachment = std::make_unique<ButtonAttachment>(
+        audioProcessor.getAPVTS(),
+        "TempoMode",
+        tempoModeButton
+    );
+
     addAndMakeVisible(filterButton);
     filterButton.setButtonText("Filter");
     filterAttachment = std::make_unique<ButtonAttachment>(
@@ -192,15 +200,22 @@ void PluginTestowy2AudioProcessorEditor::resized()
     int buttonSpacing = 10;
     auto buttonArea = area.removeFromTop(buttonHeight);
 
-    int buttonWidth = (buttonArea.getWidth() - 3 * buttonSpacing) / 4; // 4 buttons
+    int buttonCount = 5;
+    int buttonWidth = (buttonArea.getWidth() - (buttonCount - 1) * buttonSpacing) / buttonCount;
 
     loadButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
     buttonArea.removeFromLeft(buttonSpacing);
+
     clearLogButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
     buttonArea.removeFromLeft(buttonSpacing);
+
     motorButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
     buttonArea.removeFromLeft(buttonSpacing);
+
     filterButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
+    buttonArea.removeFromLeft(buttonSpacing);
+
+    tempoModeButton.setBounds(buttonArea.removeFromLeft(buttonWidth));
 
     // Sliders row: evenly spaced horizontally in remaining area
     int sliderCount = 5; // pitchShift, tauTouch, tauFree, filterBaseCutoff, filterAlpha

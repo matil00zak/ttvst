@@ -34,6 +34,7 @@ private:
 
     PluginTestowy2AudioProcessor& audioProcessor;
     juce::ToggleButton motorButton;
+    juce::ToggleButton tempoModeButton;
     juce::Slider pitchShiftSlider;
     juce::Slider tauTouchSlider;
     juce::Slider tauFreeSlider;
@@ -43,6 +44,7 @@ private:
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<ButtonAttachment> motorAttachment;
     std::unique_ptr<ButtonAttachment> filterAttachment;
+    std::unique_ptr<ButtonAttachment> tempoModeAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<SliderAttachment> pitchShiftAttachment;
     std::unique_ptr<SliderAttachment> tauTouchAttachment;

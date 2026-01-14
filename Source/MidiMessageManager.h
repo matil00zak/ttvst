@@ -15,6 +15,11 @@ namespace ttvst {
         int  data1 = 0;      // note/cc number
         int  data2 = 0;      // velocity/cc value
         int  pitchValue = 8192;   // 0..16383, 8192 is center
+        int  bufferID = 666;
+
+
+
+
 
         juce::String toString() const
         {
@@ -25,9 +30,13 @@ namespace ttvst {
             case 3: return juce::String::formatted("CC      ch:%d cc:%d val:%d @%d", channel, data1, data2, sampleOffset);
             case 4: {
                 const double norm = (pitchValue - 8192) / 8192.0; // ~[-1, +1]
-                return juce::String::formatted("Pitch   ch:%d val:%d (%.3f) @%d", channel, pitchValue, norm, sampleOffset);
+                return juce::String::formatted("Pitch   ch:%d val:%d (%.3f) @%d bufferID:%d", channel, pitchValue, norm, sampleOffset, bufferID);
             }
-            default: return juce::String::formatted("Other   ch:%d @%d", channel, sampleOffset);
+            default:
+                if (type == 0 && channel == 0)
+                    return juce::String::formatted("Count   %d @%d", data1, sampleOffset);
+
+                return juce::String::formatted("Other   ch:%d @%d", channel, sampleOffset);
             }
         }
     };
@@ -41,12 +50,34 @@ namespace ttvst {
     public:
         MidiMessageManager() = default;
 
+        void pushCountFromAudioThread(int count, int sampleOffset = 0) noexcept
+        {
+            MidiEvent e;
+            e.sampleOffset = sampleOffset;
+            e.type = 0;        // Other
+            e.channel = 0;
+            e.data1 = count;   // store the count here
+            e.data2 = 0;
+
+            auto w = write_.load(std::memory_order_relaxed);
+            auto next = (w + 1) & mask;
+            if (next == read_.load(std::memory_order_acquire))
+            {
+                dropped_.fetch_add(1, std::memory_order_relaxed);
+                return;
+            }
+            buffer_[w] = e;
+            write_.store(next, std::memory_order_release);
+        }
+
+
         // Called from processBlock (audio thread)
-        void pushFromAudioThread(const juce::MidiMessage& m, int sampleOffset) noexcept
+        void pushFromAudioThread(const juce::MidiMessage& m, int sampleOffset, int bufferID) noexcept
         {
             MidiEvent e;
             e.sampleOffset = sampleOffset;
             e.channel = m.getChannel();
+            e.bufferID = bufferID;
 
             if (m.isNoteOn()) { e.type = 1; e.data1 = m.getNoteNumber(); e.data2 = m.getVelocity(); }
             else if (m.isNoteOff()) { e.type = 2; e.data1 = m.getNoteNumber(); e.data2 = m.getVelocity(); }

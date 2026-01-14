@@ -162,6 +162,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.01), 1.0f)
     );
 
+    params.push_back(std::make_unique<juce::AudioParameterBool>(
+        "TempoMode",
+        "Tempo Mode",
+        false
+    ));
+
 
     return { params.begin(), params.end() };
 }
@@ -255,6 +261,8 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     filterAlpha = 1.0;
     ratioLPStateStage1_ = 0.0;
     ratioLPState = 0.0;
+
+    bufferID = 0;
 }
 
 void PluginTestowy2AudioProcessor::releaseResources()
@@ -331,30 +339,36 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     using namespace ttvst::helps;
     using namespace ttvst::splines;
     juce::ScopedNoDenormals _;
-    juce::MidiBuffer midiThisBlock = midiMessages;
+
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
-
+    
     // Capture MIDI for the UI
     for (const auto metadata : midiMessages)
-        midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition);
+        midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition, bufferID);
 
-
+    bufferID++;
+    const bool tempoMode = apvts.getRawParameterValue("TempoMode")->load();
     //capture touchdown state
     for (const auto meta : midiMessages)
     {
         const auto& m = meta.getMessage();
         if (m.isController() && m.getControllerNumber() == 64) {
             touchDown_ = (m.getControllerValue() >= 64);
-            if (touchDown_) {
-                playheadOnTouchdown_ = playhead_;
+            if (tempoMode) {
+                if (touchDown_) {
+                    playheadOnTouchdown_ = playhead_;
+                }
+                if (!touchDown_) {
+                    playhead_ = playheadOnTouchdown_;
+                }
             }
-            if (!touchDown_) {
-                playhead_ = playheadOnTouchdown_;
-            }
+
         }
         
     }
+
+
 
 
     buffer.clear();
@@ -397,13 +411,13 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         playheadOnTouchdown_ += outN * motorSpeed;
     }
 
-    auto optOff = getPitchWheelOffsetsVector(midiMessages);
-    auto optVal = getPitchWheelValueVector(midiMessages);
-    if (optOff && optVal) {
-        auto ofs = optOff.value();
-        std::transform(ofs.begin(), ofs.end(), ofs.begin(), [outN](float val) { return val + outN; });
+    //auto optOff = getPitchWheelOffsetsVector(midiMessages, 1);
+    auto optVal = getPitchWheelValueVector(midiMessages, 1);
+    if (optVal) {
+        //auto ofs = optOff.value();
+        //std::transform(ofs.begin(), ofs.end(), ofs.begin(), [outN](float val) { return val + outN; });
         std::vector<double >values = pitchWheelToSamplePositionVec(*optVal);
-        afterRenderOffsetVec = ofs;
+        afterRenderOffsetVec = { (double)2 * outN - 1 };
         afterRenderValueVec = values;
         pitchEmptyStreak_ = 0;
     }
@@ -411,16 +425,23 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         afterRenderOffsetVec = {};
         afterRenderValueVec = {};
         pitchEmptyStreak_++;
-        DBG("buffer empty");
+        //DBG("buffer empty");
         //count empty buffers
         
     }
+    
+
 
     
     // creating vectors for messages in index range: < - outN, outN > -- moving in out memory buffers
     offsets_.insert(offsets_.end(), preRenderOffsetVec.begin(), preRenderOffsetVec.end());
     offsets_.insert(offsets_.end(), thisOffsetVec.begin(), thisOffsetVec.end());
     offsets_.insert(offsets_.end(), afterRenderOffsetVec.begin(), afterRenderOffsetVec.end());
+
+    for (auto o : offsets_) {
+        DBG(o);
+    }
+
 
     values_.insert(values_.end(), preRenderValueVec.begin(), preRenderValueVec.end());
     values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
@@ -465,11 +486,14 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     else
     {
         // ---- GAP/FAILSAFE ----
-        if (pitchEmptyStreak_ == 1)
+        if (pitchEmptyStreak_ <= 1)
         {
             // 1 pusty blok PB: podtrzymaj ostatni¹ prêdkoœæ, NIE resetuj splineCondition_
-            alpha = 1.0 - std::exp(-1.0 / hostSampleRate_ * 0.7);
-            ratios_.assign(outN, motorSpeed);
+            alpha = 1.0 - std::exp(-1.0 / hostSampleRate_);
+            ratios_.assign(outN, lastGoodSpeed_);
+            lastSpline = {};
+            splineSet_ = {};
+            splineCondition_.reset();
         }
         else if (pitchEmptyStreak_ >= 2 && touchDown_)
         {
@@ -502,6 +526,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         if (!ratios_.empty() && std::isfinite(ratios_.back()))
             lastGoodSpeed_ = ratios_.back();
         float cutofff;
+        //DBG(playhead_);
         for (int i = 0; i < outN; i++)
         {   
             wrapPlayhead(playhead_, srcN);
@@ -583,12 +608,18 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     thisOffsetVec = afterRenderOffsetVec;
 
 
-    if (hasPitchWheelMessage(midiMessages)) {
-        lastMidi_.swapWith(midiMessages);
-    }
-    else {
-        lastMidi_.clear();
-    }
+    //if (hasPitchWheelMessage(midiMessages)) {
+    //    lastMidi_.swapWith(midiMessages);
+    //}
+    //else {
+    //    lastMidi_.clear();
+    //}
+
+
+
+
+
+
 
 }
 

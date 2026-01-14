@@ -113,13 +113,13 @@ private:
     CascadedOnePoleLPF lpfRight;
     float baseCutoff = 10000.0f;
     float filterAlpha = 0.5f;
-
+    double tauFreeMotor = 0.5;
     bool  touchDown_ = false;       // CC64 >=64
     int   pitchEmptyStreak_ = 0;    // kolejne bloki bez pitch wheel
     double lastGoodSpeed_ = 0.0;    // ostatnia sensowna prêdkoœæ (ratio)
 
     double playheadOnTouchdown_;
-
+    int bufferID;
     juce::AudioFormatManager formatManager;
 
 };

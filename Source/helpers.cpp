@@ -152,7 +152,7 @@ namespace ttvst::helps {
             return values;
         }
         else {
-            //DBG("pitchToSample: values are empty");
+            return {};
         }
 
     }

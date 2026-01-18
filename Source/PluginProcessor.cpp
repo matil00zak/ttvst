@@ -430,7 +430,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     if (optVal) {
         //auto ofs = optOff.value();
         //std::transform(ofs.begin(), ofs.end(), ofs.begin(), [outN](float val) { return val + outN; });
-        std::vector<double >values = pitchWheelToSamplePositionVec(*optVal, scratchScale);
+        //std::vector<double >values = pitchWheelToSamplePositionVec(*optVal, scratchScale);
+        std::vector<double >values = optVal.value();
         afterRenderOffsetVec = { (double)2 * outN - 1 };
         afterRenderValueVec = values;
         pitchEmptyStreak_ = 0;
@@ -465,10 +466,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     // version with calculating speed between messages, needed only one message from lookahead 
     // also a last current-lookahead shared spline is needed to generate full buffer
 
-    ttvst::helps::vectorPairDbl speedinfo = positionsToSpeed(values_, offsets_, outN, 2);
+    ttvst::helps::vectorPairDbl speedinfo = positionsToSpeedWrapped(values_, offsets_, outN, 2);
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
     
+    speeds_ = pitchWheelToSamplePositionVec(speeds_, scratchScale);
 
 
     catchSpeedOutliers(speeds_, 6.0);

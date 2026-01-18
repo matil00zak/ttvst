@@ -34,7 +34,7 @@ public:
     void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha);
 
     double getPlayheadSeconds() const;
-
+    int getFileSR() const;
     ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
 
@@ -76,7 +76,8 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-
+    void setLastLoadedFile(const juce::File& f) { lastLoadedFile = f; }
+    juce::File getLastLoadedFile() const { return lastLoadedFile; }
 
 private:
     //==============================================================================
@@ -121,7 +122,10 @@ private:
     double playheadOnTouchdown_;
     int bufferID;
     juce::AudioFormatManager formatManager;
+    juce::File lastLoadedFile;
+    int fileSR = 5;
 
+    
 };
 
 

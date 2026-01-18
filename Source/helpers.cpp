@@ -144,10 +144,10 @@ namespace ttvst::helps {
         return false;
     }
 
-    std::vector<double> pitchWheelToSamplePositionVec(std::vector<double> values) {
+    std::vector<double> pitchWheelToSamplePositionVec(std::vector<double> values, float scale) {
         if (!values.empty()) {
-            std::for_each(values.begin(), values.end(), [](double& n) {
-                n = (n / 16383.0) * 2.0 * 48000.0;
+            std::for_each(values.begin(), values.end(), [scale](double& n) {
+                n = (n / 16383.0) * scale * 48000.0;
                 });
             return values;
         }

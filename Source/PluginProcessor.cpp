@@ -71,6 +71,7 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 
     auto out = std::make_shared<LoadedAudio>();
     out->sampleRate = (int)reader->sampleRate;
+    
     out->buffer.setSize(numChannels, numSamples, false, false, true);
 
     const int block = 16384;
@@ -129,19 +130,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "PitchShift",
         "Pitch Shift",
-        juce::NormalisableRange<float>(-12.0f, 12.0f, 0.01f), 0.0f)
+        juce::NormalisableRange<float>(-8.0f, 8.0f, 0.1f), 0.0f)
     );
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "TauTouch",
         "Tau Touch",
-        juce::NormalisableRange<float>(0.0f, 0.2f, 0.001f), 0.04f)
+        juce::NormalisableRange<float>(0.0f, 2.0f, 0.001f, 0.5f ), 0.04f)
     );
     
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "TauFree",
         "Tau Free",
-        juce::NormalisableRange<float>(0.0f, 3.0f, 0.01f), 0.5f)
+        juce::NormalisableRange<float>(0.0f, 5.0f, 0.001f, 1.0f), 0.5f)
     );
 
     params.push_back(std::make_unique<juce::AudioParameterBool>(
@@ -167,6 +168,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
         "Tempo Mode",
         false
     ));
+    
+    params.push_back(std::make_unique<juce::AudioParameterFloat>(
+        "ScratchScale",
+        "Scratch Scale",
+        juce::NormalisableRange<float>(0.0f, 3.0f, 0.01), 1.0f)
+    );
 
 
     return { params.begin(), params.end() };
@@ -318,6 +325,7 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
                 // NOTE: atomic_store/atomic_load overloads for shared_ptr are declared in <memory>.
                 
                 std::shared_ptr<const LoadedAudio> published = std::move(data);
+                fileSR = published ->sampleRate;
                 std::atomic_store_explicit(&loaded_, published, std::memory_order_release);
 
                 //DBG("LOADEDD");
@@ -332,7 +340,9 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 double PluginTestowy2AudioProcessor::getPlayheadSeconds() const {
     return playhead_ / getSampleRate();
 }
-
+int PluginTestowy2AudioProcessor::getFileSR() const {
+    return fileSR;
+}
 
 void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
@@ -377,7 +387,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     ratios_ = {};
     speeds_ = {};
     speed_offsets_ = {};
-
+    
     const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
     const bool filterOn = apvts.getRawParameterValue("FilterOn")->load();
     const float pitchShift = apvts.getRawParameterValue("PitchShift")->load();
@@ -385,7 +395,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const float tauFree = apvts.getRawParameterValue("TauFree")->load();
     baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
     filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
-
+    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load();
     const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 12.0)) : 0.0;
 
 
@@ -416,7 +426,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     if (optVal) {
         //auto ofs = optOff.value();
         //std::transform(ofs.begin(), ofs.end(), ofs.begin(), [outN](float val) { return val + outN; });
-        std::vector<double >values = pitchWheelToSamplePositionVec(*optVal);
+        std::vector<double >values = pitchWheelToSamplePositionVec(*optVal, scratchScale);
         afterRenderOffsetVec = { (double)2 * outN - 1 };
         afterRenderValueVec = values;
         pitchEmptyStreak_ = 0;

@@ -41,12 +41,14 @@ private:
     juce::ToggleButton filterButton;
     juce::Slider filterBaseCutoffSlider;
     juce::Slider filterAlphaSlider;
+    juce::Slider scratchScaleSlider;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<ButtonAttachment> motorAttachment;
     std::unique_ptr<ButtonAttachment> filterAttachment;
     std::unique_ptr<ButtonAttachment> tempoModeAttachment;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     std::unique_ptr<SliderAttachment> pitchShiftAttachment;
+    std::unique_ptr<SliderAttachment> scratchScaleAttachment;
     std::unique_ptr<SliderAttachment> tauTouchAttachment;
     std::unique_ptr<SliderAttachment> tauFreeAttachment;
     std::unique_ptr<SliderAttachment> filterBaseCutoffAttachment;
@@ -63,6 +65,7 @@ private:
     juce::AudioFormatManager thumbnailFormatManager;
     juce::AudioThumbnailCache thumbnailCache{ 5 };
     juce::AudioThumbnail thumbnail{16, thumbnailFormatManager, thumbnailCache};
+    juce::Rectangle<int> areaTop, areaBottom, areaTopA, areaTopB, areaTopC, contentA, contentB, contentC, contentD;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginTestowy2AudioProcessorEditor)
 };

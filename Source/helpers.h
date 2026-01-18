@@ -59,4 +59,6 @@ namespace ttvst::helps
     
 
     void wrapPlayhead(double& playhead, long srcLength);
+
+
 } // namespace ttvst::midi

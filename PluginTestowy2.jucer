@@ -12,6 +12,8 @@
         <FILE id="hvBzZ7" name="cubicSplines.h" compile="0" resource="0" file="Source/cubicSplines.h"/>
         <FILE id="LbF3EM" name="helpers.cpp" compile="1" resource="0" file="Source/helpers.cpp"/>
         <FILE id="t0jglc" name="helpers.h" compile="0" resource="0" file="Source/helpers.h"/>
+        <FILE id="x0ha7P" name="LutSincInterpolation.h" compile="0" resource="0"
+              file="Source/LutSincInterpolation.h"/>
       </GROUP>
       <GROUP id="{6404C124-BA94-A780-3DD7-C286B1BDC9F8}" name="control">
         <FILE id="fiFq5u" name="MidiMessageManager.h" compile="0" resource="0"

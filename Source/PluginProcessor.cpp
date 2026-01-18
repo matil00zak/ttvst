@@ -16,6 +16,7 @@
 #include <cmath>
 #include "helpers.h"
 #include "cubicSplines.h"
+#include "LutSincInterpolation.h"
 //==============================================================================
 //using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
 struct Seg { int offset = 0; int value  = 0; };
@@ -270,6 +271,8 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     ratioLPState = 0.0;
 
     bufferID = 0;
+
+    lut = ttvst::lutSinc::generateLutSinc(4096, 73, 0.45);
 }
 
 void PluginTestowy2AudioProcessor::releaseResources()
@@ -348,6 +351,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 {
     using namespace ttvst::helps;
     using namespace ttvst::splines;
+    using namespace ttvst::lutSinc;
     juce::ScopedNoDenormals _;
 
     const int totalNumInputChannels = getTotalNumInputChannels();
@@ -531,62 +535,91 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     if (ratios_.size() == outN) {
 
-        smoothRatios(ratios_, alpha);
-        //append_vector_csv("ratios_smo_1201_1.csv", ratios_, 6);
-        if (!ratios_.empty() && std::isfinite(ratios_.back()))
-            lastGoodSpeed_ = ratios_.back();
-        float cutofff;
-        //DBG(playhead_);
-        for (int i = 0; i < outN; i++)
-        {   
-            wrapPlayhead(playhead_, srcN);
-            const long index1 = (long)playhead_;
-            const long index0 = (index1 - 1 + srcN) % srcN;
-            const long index2 = (index1 + 1) % srcN;
-            const long index3 = (index1 + 2) % srcN;
+        {
+        //    smoothRatios(ratios_, alpha);
+        //    if (!ratios_.empty() && std::isfinite(ratios_.back()))
+        //        lastGoodSpeed_ = ratios_.back();
+        //    float cutofff;
+        //    for (int i = 0; i < outN; i++)
+        //    {
+        //        wrapPlayhead(playhead_, srcN);
+        //        const long index1 = (long)playhead_;
+        //        const long index0 = (index1 - 1 + srcN) % srcN;
+        //        const long index2 = (index1 + 1) % srcN;
+        //        const long index3 = (index1 + 2) % srcN;
 
-            const double frac = playhead_ - (double)index1;
-            const double frac2 = frac * frac;
-            const double frac3 = frac2 * frac;
+        //        const double frac = playhead_ - (double)index1;
+        //        const double frac2 = frac * frac;
+        //        const double frac3 = frac2 * frac;
+
+        //        const float speedAbs = std::abs(ratios_[i]);
+
+        //        const float cutoff = baseCutoff * std::pow(speedAbs, filterAlpha);
+
+        //        const float cutoffClamped = juce::jlimit(50.0f, 0.45f * (float)hostSampleRate_, cutoff);
+
+
+
+        //        for (int ch = 0; ch < outCh; ch++)
+        //        {
+        //            const float y0 = *data->buffer.getReadPointer(ch, index0);
+        //            const float y1 = *data->buffer.getReadPointer(ch, index1);
+        //            const float y2 = *data->buffer.getReadPointer(ch, index2);
+        //            const float y3 = *data->buffer.getReadPointer(ch, index3);
+
+        //            // 4-point cubic Hermite (Catmull-Rom)
+        //            const double a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+        //            const double a1 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
+        //            const double a2 = -0.5 * y0 + 0.5 * y2;
+        //            const double a3 = y1;
+
+        //            float out = (float)(a0 * frac3 + a1 * frac2 + a2 * frac + a3);
+
+        //            if (filterOn) {
+        //                if (ch == 0)
+        //                    out = lpfLeft.processSample(out, cutoffClamped);
+        //                else
+        //                    out = lpfRight.processSample(out, cutoffClamped);
+        //            }
+
+
+
+        //            buffer.setSample(ch, i, out);
+        //        }
+        //        cutofff = cutoffClamped;
+        //        playhead_ += ratios_[i];
+        //    }
+        }
+        smoothRatios(ratios_, alpha);
+        if (!ratios_.empty() && std::isfinite(ratios_.back()))
+        lastGoodSpeed_ = ratios_.back();
+        float cutofff;
+        const float* lutPtr = lut.data();
+        for (int i = 0; i < outN; i++){
+
+            wrapPlayhead(playhead_, srcN);
 
             const float speedAbs = std::abs(ratios_[i]);
-
             const float cutoff = baseCutoff * std::pow(speedAbs, filterAlpha);
-            
             const float cutoffClamped = juce::jlimit(50.0f, 0.45f * (float)hostSampleRate_, cutoff);
-            
 
+            for (int ch = 0; ch < outCh; ch++){
+                
+                //float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
+                float out = interpolateSincLUT(data->buffer, ch, playhead_, srcN, lutPtr, 4096, 73);
+                if (filterOn){
 
-            for (int ch = 0; ch < outCh; ch++)
-            {
-                const float y0 = *data->buffer.getReadPointer(ch, index0);
-                const float y1 = *data->buffer.getReadPointer(ch, index1);
-                const float y2 = *data->buffer.getReadPointer(ch, index2);
-                const float y3 = *data->buffer.getReadPointer(ch, index3);
-
-                // 4-point cubic Hermite (Catmull-Rom)
-                const double a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
-                const double a1 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
-                const double a2 = -0.5 * y0 + 0.5 * y2;
-                const double a3 = y1;
-
-                float out = (float)(a0 * frac3 + a1 * frac2 + a2 * frac + a3);
-
-                if (filterOn) {
-                    if (ch == 0)
-                        out = lpfLeft.processSample(out, cutoffClamped);
-                    else
-                        out = lpfRight.processSample(out, cutoffClamped);
+                    out = (ch == 0) ? lpfLeft.processSample(out, cutoffClamped)
+                                    : lpfRight.processSample(out, cutoffClamped);
                 }
 
-
-
                 buffer.setSample(ch, i, out);
+            
             }
             cutofff = cutoffClamped;
             playhead_ += ratios_[i];
         }
-        
+
     }
     else {
         //DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");

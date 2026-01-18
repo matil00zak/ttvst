@@ -124,6 +124,7 @@ private:
     juce::AudioFormatManager formatManager;
     juce::File lastLoadedFile;
     int fileSR = 5;
+    std::vector<float> lut;
 
     
 };

@@ -85,8 +85,8 @@ namespace ttvst::lutSinc
                 double n_cont = static_cast<double>(tap) - alpha;
                 n_cont = std::clamp(n_cont, 0.0, M);
 
-                const double w = blackman_window(n_cont, M);
-
+                //const double w = blackman_window(n_cont, M);
+                const double w = blackman_window((double)tap, M);
                 // Lowpass windowed-sinc kernel:
                 // h(u) = 2*fc * sinc(2*fc*u) * w(...)
                 const double h = (2.0 * fc) * sinc_pi(2.0 * fc * u) * w;
@@ -162,6 +162,63 @@ namespace ttvst::lutSinc
 
         return y;
     }
+
+    float interpolateSincLUT_PhaseLerp(
+        const juce::AudioBuffer<float>& src,
+        int ch,
+        double playhead,
+        int srcN,
+        const float* lut,
+        int P,
+        int N
+    ) noexcept
+    {
+        const int K = (N - 1) / 2;
+
+        // floor for non-negative playhead
+        const int i0 = static_cast<int>(playhead);
+
+        // keep fractional part in double
+        const double alpha = playhead - static_cast<double>(i0); // [0, 1)
+
+        // continuous phase position
+        const double p = alpha * static_cast<double>(P);
+        int p0 = static_cast<int>(std::floor(p));                // 0..P-1 (except alpha==1)
+        double mu = p - static_cast<double>(p0);                 // 0..1
+
+        // clamp (safety)
+        if (p0 < 0) { p0 = 0; mu = 0.0; }
+        if (p0 >= P) { p0 = P - 1; mu = 0.0; }
+
+        int p1 = p0 + 1;
+        if (p1 >= P) { p1 = P - 1; } // edge: last phase lerps with itself
+
+        const float* coeff0 = lut + static_cast<std::size_t>(p0) * static_cast<std::size_t>(N);
+        const float* coeff1 = lut + static_cast<std::size_t>(p1) * static_cast<std::size_t>(N);
+
+        const float* x = src.getReadPointer(ch);
+
+        double y0 = 0.0;
+        double y1 = 0.0;
+
+        for (int tap = 0; tap < N; ++tap)
+        {
+            const int offset = tap - K;
+            int idx = i0 + offset;
+
+            // Wrap indices for looping/circular playback
+            idx %= srcN;
+            if (idx < 0) idx += srcN;
+
+            const float s = x[idx];
+            y0 += static_cast<double>(s) * static_cast<double>(coeff0[tap]);
+            y1 += static_cast<double>(s) * static_cast<double>(coeff1[tap]);
+        }
+
+        const double y = (1.0 - mu) * y0 + mu * y1;
+        return static_cast<float>(y);
+    }
+
 
     //--------------------------------------------------------------------------
     // Interpolation: Catmull-Rom / cubic Hermite (looping source)

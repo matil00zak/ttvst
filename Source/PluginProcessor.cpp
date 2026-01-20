@@ -272,7 +272,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
 
     bufferID = 0;
 
-    lut = ttvst::lutSinc::generateLutSinc(4096, 73, 0.45);
+    lut = ttvst::lutSinc::generateLutSinc(4096, 777, 0.45);
 }
 
 void PluginTestowy2AudioProcessor::releaseResources()
@@ -608,7 +608,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             for (int ch = 0; ch < outCh; ch++){
                 
                 //float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
-                float out = interpolateSincLUT(data->buffer, ch, playhead_, srcN, lutPtr, 4096, 73);
+                float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 4096, 777);
                 if (filterOn){
 
                     out = (ch == 0) ? lpfLeft.processSample(out, cutoffClamped)

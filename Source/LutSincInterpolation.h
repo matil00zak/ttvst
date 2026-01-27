@@ -255,4 +255,24 @@ namespace ttvst::lutSinc
         return static_cast<float>(a0 * frac3 + a1 * frac2 + a2 * frac + a3);
     }
 
+    float interpolateLinear(
+        const juce::AudioBuffer<float>& src,
+        int ch,
+        double playhead,
+        int srcN
+    ) noexcept
+    {
+        const int index1 = static_cast<int>(playhead);
+        const int index2 = (index1 + 1) % srcN;
+
+        const double frac = playhead - static_cast<double>(index1);
+
+        const float* x = src.getReadPointer(ch);
+
+        const float y1 = x[index1];
+        const float y2 = x[index2];
+
+        return static_cast<float>(y1 + (y2 - y1) * frac);
+    }
+
 } // namespace lut_sinc

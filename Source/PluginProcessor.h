@@ -28,6 +28,8 @@ class PluginTestowy2AudioProcessor  : public juce::AudioProcessor
 {
 public:
     //==============================================================================
+    std::vector<double> linearContinuationFromLastSlope(const std::vector<double>& in,
+        std::size_t numOut);
     PluginTestowy2AudioProcessor();
     ~PluginTestowy2AudioProcessor() override;
     void PluginTestowy2AudioProcessor::smoothRatiosS(std::vector<double>& ratios, double alpha);

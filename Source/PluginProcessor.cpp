@@ -17,13 +17,44 @@
 #include "helpers.h"
 #include "cubicSplines.h"
 #include "LutSincInterpolation.h"
+#include "WavLogger.cpp"
 //==============================================================================
 //using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
 struct Seg { int offset = 0; int value  = 0; };
 
 
 
+std::vector<double> PluginTestowy2AudioProcessor::linearContinuationFromLastSlope(const std::vector<double>& in,
+    std::size_t numOut)
+{
+    std::vector<double> out;
+    out.reserve(numOut);
 
+    if (numOut == 0) return out;
+
+    // Not enough data to estimate a slope -> default slope = 0 (flat continuation).
+    if (in.empty()) {
+        out.assign(numOut, 0.0);
+        return out;
+    }
+    if (in.size() == 1) {
+        out.assign(numOut, in.back()); // constant continuation (no slope info)
+        return out;
+    }
+
+    const double y0 = in[in.size() - 2];
+    const double y1 = in[in.size() - 1];
+    const double slope = y1 - y0; // assumes unit x-step between samples
+
+    // Start from y1 + slope (true continuation; do not repeat y1)
+    double y = y1;
+    for (std::size_t i = 0; i < numOut; ++i) {
+        y += slope;
+        out.push_back(y);
+    }
+
+    return out;
+}
 
 void PluginTestowy2AudioProcessor::smoothRatiosS(std::vector<double>& ratios, double alpha)
 {
@@ -149,7 +180,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
     params.push_back(std::make_unique<juce::AudioParameterBool>(
         "FilterOn",
         "Filter",
-        true
+        false
     ));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
@@ -242,7 +273,7 @@ void PluginTestowy2AudioProcessor::changeProgramName (int index, const juce::Str
 {
 }
 
-
+ThreeChannelWavLogger logger;
 //==============================================================================
 void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
@@ -272,7 +303,14 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
 
     bufferID = 0;
 
-    lut = ttvst::lutSinc::generateLutSinc(4096, 777, 0.45);
+    lut = ttvst::lutSinc::generateLutSinc(16384,2331, 0.45);
+
+    juce::File out = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+        .getChildFile("test_linear_3000.wav");
+
+    auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
+    if (r.failed())
+        DBG("logger start failed: " + r.getErrorMessage());
 }
 
 void PluginTestowy2AudioProcessor::releaseResources()
@@ -388,7 +426,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     buffer.clear();
     offsets_ = {};
     values_ = {};
-    ratios_ = {};
+    //ratios_ = {};
     speeds_ = {};
     speed_offsets_ = {};
     
@@ -400,7 +438,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
     filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
     const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load();
-    const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 12.0)) : 0.0;
+    const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 8.0)) : 0.0;
 
 
     //Snapshot loaded data
@@ -502,16 +540,27 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     else
     {
         // ---- GAP/FAILSAFE ----
-        if (pitchEmptyStreak_ <= 1)
+        if (pitchEmptyStreak_ <= 2)
         {
             // 1 pusty blok PB: podtrzymaj ostatni¹ prêdkoœæ, NIE resetuj splineCondition_
-            alpha = 1.0 - std::exp(-1.0 / hostSampleRate_);
-            ratios_.assign(outN, lastGoodSpeed_);
+            alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_*tauFree));
+            //ratios_.assign(outN, motorSpeed);
+            ratios_ = linearContinuationFromLastSlope(ratios_, outN);
             lastSpline = {};
             splineSet_ = {};
             splineCondition_.reset();
         }
-        else if (pitchEmptyStreak_ >= 2 && touchDown_)
+        else if (pitchEmptyStreak_ == 3 && touchDown_)
+        {
+            // d³u¿sza przerwa + touch: hamuj do 0
+            alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
+            ratios_.assign(outN, 0.0);
+
+            splineSet_ = {};
+            lastSpline = {};
+            splineCondition_.reset();
+        }
+        else if (pitchEmptyStreak_ > 3 && touchDown_)
         {
             // d³u¿sza przerwa + touch: hamuj do 0
             alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
@@ -593,8 +642,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         //    }
         }
         smoothRatios(ratios_, alpha);
-        if (!ratios_.empty() && std::isfinite(ratios_.back()))
-        lastGoodSpeed_ = ratios_.back();
+        if (!ratios_.empty() && std::isfinite(ratios_.back())) {
+            lastGoodSpeed_ = ratios_.back();
+        }
         float cutofff;
         const float* lutPtr = lut.data();
         for (int i = 0; i < outN; i++){
@@ -608,7 +658,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             for (int ch = 0; ch < outCh; ch++){
                 
                 //float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
-                float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 4096, 777);
+                //float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 16384, 2331);
+                float out = interpolateLinear(data->buffer, ch, playhead_, srcN);
                 if (filterOn){
 
                     out = (ch == 0) ? lpfLeft.processSample(out, cutoffClamped)
@@ -636,7 +687,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
     }
 
+    //append_vector_csv("test_csv.csv", ratios_, 16);
 
+    logger.pushFromAudioThread(buffer, ratios_);
     
     // preparing the message vectors for the next buffer and update, so when it comes everything is in the desired range
     // relative 0 at the middle buffer start

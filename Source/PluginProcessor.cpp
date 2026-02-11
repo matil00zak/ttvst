@@ -306,7 +306,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     lut = ttvst::lutSinc::generateLutSinc(16384,2331, 0.45);
 
     juce::File out = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-        .getChildFile("test_linear_3000.wav");
+        .getChildFile("prezka_12k.wav");
 
     auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
     if (r.failed())
@@ -439,8 +439,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
     const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load();
     const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 8.0)) : 0.0;
-
-
     //Snapshot loaded data
     auto data = getLoaded(); // later check if the loading data mechanism is allocation free
     if (!data) return;
@@ -658,8 +656,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             for (int ch = 0; ch < outCh; ch++){
                 
                 //float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
-                //float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 16384, 2331);
-                float out = interpolateLinear(data->buffer, ch, playhead_, srcN);
+                float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 16384, 2331);
+                //float out = interpolateLinear(data->buffer, ch, playhead_, srcN);
                 if (filterOn){
 
                     out = (ch == 0) ? lpfLeft.processSample(out, cutoffClamped)

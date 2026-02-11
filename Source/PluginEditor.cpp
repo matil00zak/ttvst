@@ -372,12 +372,13 @@ void PluginTestowy2AudioProcessorEditor::resized() {
     //std::vector<ttvst::MidiEvent> events;
     //audioProcessor.getMidiLog().drainTo(events);
     //
-    //if (events.empty()) return;
-    //
-    //// Append new lines to our fixed-size buffer
+    //if (events.empty()) return;m
+    
+    // Append new lines to our fixed-size buffer
     //for (const auto& e : events)
-    //    midiLines.add(e.toString());
-    //
+    //    //midiLines.add(e.toString());
+    //    DBG(e.toString());
+    
     //// Trim to last kMaxLines
     //if (midiLines.size() > kMaxLines)
     //    midiLines.removeRange(0, midiLines.size() - kMaxLines);

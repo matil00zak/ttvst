@@ -45,6 +45,7 @@ std::vector<double> PluginTestowy2AudioProcessor::linearContinuationFromLastSlop
     const double y0 = in[in.size() - 2];
     const double y1 = in[in.size() - 1];
     const double slope = y1 - y0; // assumes unit x-step between samples
+    //DBG(slope);
 
     // Start from y1 + slope (true continuation; do not repeat y1)
     double y = y1;
@@ -56,33 +57,49 @@ std::vector<double> PluginTestowy2AudioProcessor::linearContinuationFromLastSlop
     return out;
 }
 
-void PluginTestowy2AudioProcessor::smoothRatiosS(std::vector<double>& ratios, double alpha)
+double PluginTestowy2AudioProcessor::alphaStageFromImpulseDecayMs(float T_s, double fs)
+{
+    const double eps = 0.5; // %
+    int K = (int)std::lround(T_s * fs);
+    if (K < 1) K = 1;
+
+    const double b = std::exp(std::log(eps / (K + 1.0)) / K); // b = 1 - alpha
+    const double alpha = 1.0 - b;
+    return juce::jlimit(0.0, 1.0, alpha);
+}
+
+double PluginTestowy2AudioProcessor::alphaFromStepResponseTimeEMA(float tau_s, double fs) {
+
+    alpha = 1 - std::exp((-1 / fs) / tau_s);
+
+    return juce::jlimit(0.0, 1.0, alpha);
+}
+
+
+void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha)
 {
     for (auto& r : ratios)
-    {
+    {   
         ratioLPState += alpha * (r - ratioLPState);
         r = ratioLPState;
     }
 }
 
-void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha)
+void PluginTestowy2AudioProcessor::smoothRatiosTwoStage(std::vector<double>& ratios, double alpha)
 {
     // alpha w [0,1]
     if (alpha < 0.0) alpha = 0.0;
     if (alpha > 1.0) alpha = 1.0;
 
-    // Mapowanie alpha -> alpha_stages tak, ¿eby „sumaryczna” dynamika
-    // by³a zbli¿ona do filtra 1-rzêdu przy tym samym alpha.
-    // (1 - a_stage)^2 = (1 - alpha)  => a_stage = 1 - sqrt(1 - alpha)
-    const double a = 1.0 - std::sqrt(1.0 - alpha);
+
+    //const double a = 1.0 - std::sqrt(1.0 - alpha);
 
     for (auto& r : ratios)
     {
         // Stopieñ 1
-        ratioLPStateStage1_ += a * (r - ratioLPStateStage1_);
+        ratioLPStateStage1_ += alpha * (r - ratioLPStateStage1_);
 
-        // Stopieñ 2 (u¿ywamy istniej¹cego ratioLPState jako finalnego wyjœcia)
-        ratioLPState += a * (ratioLPStateStage1_ - ratioLPState);
+        ratioLPState += alpha * (ratioLPStateStage1_ - ratioLPState);
 
         r = ratioLPState;
     }
@@ -306,7 +323,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     lut = ttvst::lutSinc::generateLutSinc(16384,2331, 0.45);
 
     juce::File out = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-        .getChildFile("prezka_12k.wav");
+        .getChildFile("test_one_pole_4.wav");
 
     auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
     if (r.failed())
@@ -498,9 +515,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
     values_.insert(values_.end(), afterRenderValueVec.begin(), afterRenderValueVec.end());
 
-    // getting desired messages from in out buffer
-    // version with calculating speed between messages, needed only one message from lookahead 
-    // also a last current-lookahead shared spline is needed to generate full buffer
 
     ttvst::helps::vectorPairDbl speedinfo = positionsToSpeedWrapped(values_, offsets_, outN, 2);
     speeds_ = speedinfo.first;
@@ -519,7 +533,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     if (speeds_.size() > 1) {
 
-        alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
+        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
+        alpha = alphaStageFromImpulseDecayMs(tauTouch, hostSampleRate_);
         ratios_ = {};
         splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1, outN);
         splineSet_ = splineSetPlus_.set;
@@ -537,12 +552,10 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
     else
     {
-        // ---- GAP/FAILSAFE ----
         if (pitchEmptyStreak_ <= 2)
         {
-            // 1 pusty blok PB: podtrzymaj ostatni¹ prêdkoœæ, NIE resetuj splineCondition_
-            alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_*tauFree));
-            //ratios_.assign(outN, motorSpeed);
+            //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_*tauFree));
+            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             ratios_ = linearContinuationFromLastSlope(ratios_, outN);
             lastSpline = {};
             splineSet_ = {};
@@ -550,8 +563,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
         else if (pitchEmptyStreak_ == 3 && touchDown_)
         {
-            // d³u¿sza przerwa + touch: hamuj do 0
-            alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
+            //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
+            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             ratios_.assign(outN, 0.0);
 
             splineSet_ = {};
@@ -560,8 +573,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
         else if (pitchEmptyStreak_ > 3 && touchDown_)
         {
-            // d³u¿sza przerwa + touch: hamuj do 0
-            alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
+            //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
+            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             ratios_.assign(outN, 0.0);
 
             splineSet_ = {};
@@ -570,75 +583,19 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
         else
         {
-            // d³u¿sza przerwa + brak touch: wróæ do motorSpeed
-            alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
+            //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
+            alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
             ratios_.assign(outN, motorSpeed);
 
             splineSet_ = {};
             lastSpline = {};
             splineCondition_.reset();
-            //playhead_ = playheadOnTouchdown_;
         }
     }
 
 
     if (ratios_.size() == outN) {
-
-        {
-        //    smoothRatios(ratios_, alpha);
-        //    if (!ratios_.empty() && std::isfinite(ratios_.back()))
-        //        lastGoodSpeed_ = ratios_.back();
-        //    float cutofff;
-        //    for (int i = 0; i < outN; i++)
-        //    {
-        //        wrapPlayhead(playhead_, srcN);
-        //        const long index1 = (long)playhead_;
-        //        const long index0 = (index1 - 1 + srcN) % srcN;
-        //        const long index2 = (index1 + 1) % srcN;
-        //        const long index3 = (index1 + 2) % srcN;
-
-        //        const double frac = playhead_ - (double)index1;
-        //        const double frac2 = frac * frac;
-        //        const double frac3 = frac2 * frac;
-
-        //        const float speedAbs = std::abs(ratios_[i]);
-
-        //        const float cutoff = baseCutoff * std::pow(speedAbs, filterAlpha);
-
-        //        const float cutoffClamped = juce::jlimit(50.0f, 0.45f * (float)hostSampleRate_, cutoff);
-
-
-
-        //        for (int ch = 0; ch < outCh; ch++)
-        //        {
-        //            const float y0 = *data->buffer.getReadPointer(ch, index0);
-        //            const float y1 = *data->buffer.getReadPointer(ch, index1);
-        //            const float y2 = *data->buffer.getReadPointer(ch, index2);
-        //            const float y3 = *data->buffer.getReadPointer(ch, index3);
-
-        //            // 4-point cubic Hermite (Catmull-Rom)
-        //            const double a0 = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
-        //            const double a1 = y0 - 2.5 * y1 + 2.0 * y2 - 0.5 * y3;
-        //            const double a2 = -0.5 * y0 + 0.5 * y2;
-        //            const double a3 = y1;
-
-        //            float out = (float)(a0 * frac3 + a1 * frac2 + a2 * frac + a3);
-
-        //            if (filterOn) {
-        //                if (ch == 0)
-        //                    out = lpfLeft.processSample(out, cutoffClamped);
-        //                else
-        //                    out = lpfRight.processSample(out, cutoffClamped);
-        //            }
-
-
-
-        //            buffer.setSample(ch, i, out);
-        //        }
-        //        cutofff = cutoffClamped;
-        //        playhead_ += ratios_[i];
-        //    }
-        }
+        logger.pushFromAudioThread(buffer, ratios_);
         smoothRatios(ratios_, alpha);
         if (!ratios_.empty() && std::isfinite(ratios_.back())) {
             lastGoodSpeed_ = ratios_.back();
@@ -687,7 +644,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     //append_vector_csv("test_csv.csv", ratios_, 16);
 
-    logger.pushFromAudioThread(buffer, ratios_);
+    //logger.pushFromAudioThread(buffer, ratios_);
     
     // preparing the message vectors for the next buffer and update, so when it comes everything is in the desired range
     // relative 0 at the middle buffer start

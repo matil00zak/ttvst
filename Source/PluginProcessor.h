@@ -32,8 +32,10 @@ public:
         std::size_t numOut);
     PluginTestowy2AudioProcessor();
     ~PluginTestowy2AudioProcessor() override;
-    void PluginTestowy2AudioProcessor::smoothRatiosS(std::vector<double>& ratios, double alpha);
+    double PluginTestowy2AudioProcessor::alphaStageFromImpulseDecayMs(float T_s, double fs);
+    double PluginTestowy2AudioProcessor::alphaFromStepResponseTimeEMA(float T_s, double fs);
     void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha);
+    void PluginTestowy2AudioProcessor::smoothRatiosTwoStage(std::vector<double>& ratios, double alpha);
 
     double getPlayheadSeconds() const;
     int getFileSR() const;

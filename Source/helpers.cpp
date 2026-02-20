@@ -259,7 +259,7 @@ namespace ttvst::helps {
     }
 
 
-    void positionsToPitchSpeedWrapped(std::vector<double>& speeds,
+    void appendNewPitchWheelSpeeds(std::vector<double>& speeds,
         std::vector<double>& speeds_offsets,
         std::vector<double> positions,
         std::vector<double> offsets,
@@ -272,7 +272,7 @@ namespace ttvst::helps {
             int n = std::min(positions.size(), offsets.size());
 
             for (int i = 0; i + 1 < n; i++) {
-                if (offsets[i + 1] > 0) {
+                if (offsets[i + 1] > outN - 1) {
                     double delta_t = offsets[i + 1] - offsets[i];
                     if (delta_t == 0.0) continue; // avoid inf/NaN
                     double delta_pos = wrappedDelta(positions[i], positions[i + 1], WRAP);
@@ -283,14 +283,52 @@ namespace ttvst::helps {
 
             }
         }
-
-
-
-
-
     }
 
+    void deleteOldPitchWheelSpeeds(std::vector<double>& speeds,
+        std::vector<double>& speed_offsets,
+        int outN)
+    {
+        if (speeds.size() != speed_offsets.size())
+            return; // or handle error; vectors must stay paired
 
+        const int n = static_cast<int>(speed_offsets.size());
+        if (n == 0)
+            return;
+
+        // Find the newest (last) negative offset that is still within [-outN, 0).
+        int keepNegIdx = -1;
+        for (int i = n - 1; i >= 0; --i) {
+            const double off = speed_offsets[i];
+            if (off >= -outN && off < 0.0) {
+                keepNegIdx = i;
+                break;
+            }
+        }
+
+        std::vector<double> newSpeeds;
+        std::vector<double> newOffsets;
+        newSpeeds.reserve(speeds.size());
+        newOffsets.reserve(speed_offsets.size());
+
+        for (int i = 0; i < n; ++i) {
+            const double off = speed_offsets[i];
+
+            // Rule 1: drop anything older than the window
+            if (off < -outN)
+                continue;
+
+            // Rule 2: keep only one newest negative offset
+            if (off < 0.0 && i != keepNegIdx)
+                continue;
+
+            newSpeeds.push_back(speeds[i]);
+            newOffsets.push_back(off);
+        }
+
+        speeds.swap(newSpeeds);
+        speed_offsets.swap(newOffsets);
+    }
 
 
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs) {
@@ -355,7 +393,7 @@ namespace ttvst::helps {
             return;
         }
 
-        if (forceOneMsg == true) {
+        if (forceOneMsg == true && positions.size() > 0) {
             positions = { positions.back() };
             offsets = { (double) 2 * outN - 1 };
         }

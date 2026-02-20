@@ -426,8 +426,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     offsets_ = {};
     values_ = {};
     //ratios_ = {};
-    speeds_ = {};
-    speed_offsets_ = {};
+    //speeds_ = {};
+    //speed_offsets_ = {};
 
 
     //LOAD BASIC PARAMETERS
@@ -491,9 +491,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         afterRenderValueVec,
         afterRenderOffsetVec);
     
-    for (auto m : afterRenderOffsetVec) {
-        DBG(m);
-    }
+
     repairPitchWheelMetadata(outN, afterRenderValueVec, afterRenderOffsetVec, true);
 
     if (pitchMsgsCount == 0) {
@@ -514,86 +512,65 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
     values_.insert(values_.end(), afterRenderValueVec.begin(), afterRenderValueVec.end());
 
+    //appending only new speeds at new offsets 
+    appendNewPitchWheelSpeeds(speeds_, speed_offsets_, values_, offsets_, outN);
+
+    //and deleting the old ones
+    deleteOldPitchWheelSpeeds(speeds_, speed_offsets_, outN);
+
+    if (speed_offsets_.size() > 0) {
+        DBG("newone");
+        for (auto s : speed_offsets_) {
+            DBG("offset" << s);
+        }
+    }
 
 
-    ttvst::helps::vectorPairDbl speedinfo = positionsToSpeedWrapped(values_, offsets_, outN, 2);
-    speeds_ = speedinfo.first;
-    speed_offsets_ = speedinfo.second;
-
-    //positionsToPitchSpeedWrapped(afterRenderValueVec, afterRenderOffsetVec, outN);
-    
+    //scaling the speeds
     speeds_ = pitchWheelToSamplePositionVec(speeds_, scratchScale);
 
-
-    catchSpeedOutliers(speeds_, 6.0);
-
-    // if the interpolation stream just starts, insert the last generated speed (form smoothed speed)
-    if (!splineCondition_.has_value()) {
-        insertBaseSpeed(speeds_, speed_offsets_, ratioLPState);
-    }
+    //catchSpeedOutliers(speeds_, 6.0);
 
 
-    if (speeds_.size() > 1) {
 
-        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
-        alpha = alphaStageFromImpulseDecayMs(tauTouch, hostSampleRate_);
-        ratios_ = {};
-        splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1, outN);
-        splineSet_ = splineSetPlus_.set;
-        splineCondition_ = splineSetPlus_.spline_condition;
 
-        if (lastSpline.x < 0) {
-            splineSet_.insert(splineSet_.begin(), lastSpline);
-        }
+    //if (speeds_.size() > 1) {
 
-        lastSpline = splineSetPlus_.jointSpline;
-        lastSpline.x = lastSpline.x - outN;
 
-        ratios_ = createSpeedVector(splineSet_, outN);
-        
-    }
-    else
-    {
-        if (pitchEmptyStreak_ <= 2)
-        {
-            //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_*tauFree));
-            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
-            ratios_ = linearContinuationFromLastSlope(ratios_, outN);
-            lastSpline = {};
-            splineSet_ = {};
-            splineCondition_.reset();
-        }
-        else if (pitchEmptyStreak_ == 3 && touchDown_)
-        {
-            //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
-            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
-            ratios_.assign(outN, 0.0);
+    //}
+    //else
+    //{
+    //    if (pitchEmptyStreak_ <= 2)
+    //    {
+    //        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_*tauFree));
+    //        alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+    //        ratios_ = linearContinuationFromLastSlope(ratios_, outN);
+    //        lastSpline = {};
+    //        splineSet_ = {};
+    //        splineCondition_.reset();
+    //    }
+    //    else if (pitchEmptyStreak_ == 3 && touchDown_)
+    //    {
+    //        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
+    //        alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+    //        ratios_.assign(outN, 0.0);
 
-            splineSet_ = {};
-            lastSpline = {};
-            splineCondition_.reset();
-        }
-        else if (pitchEmptyStreak_ > 3 && touchDown_)
-        {
-            //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
-            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
-            ratios_.assign(outN, 0.0);
+    //    }
+    //    else if (pitchEmptyStreak_ > 3 && touchDown_)
+    //    {
+    //        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
+    //        alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+    //        ratios_.assign(outN, 0.0);
 
-            splineSet_ = {};
-            lastSpline = {};
-            splineCondition_.reset();
-        }
-        else
-        {
-            //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
-            alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
-            ratios_.assign(outN, motorSpeed);
+    //    }
+    //    else
+    //    {
+    //        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
+    //        alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
+    //        ratios_.assign(outN, motorSpeed);
 
-            splineSet_ = {};
-            lastSpline = {};
-            splineCondition_.reset();
-        }
-    }
+    //    }
+    //}
 
 
     if (ratios_.size() == outN) {
@@ -656,6 +633,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     std::transform(thisOffsetVec.begin(), thisOffsetVec.end(), thisOffsetVec.begin(),
         [outN](float val) { return val - outN; });
 
+    std::transform(speed_offsets_.begin(), speed_offsets_.end(), speed_offsets_.begin(),
+        [outN](float val) { return val - outN; });
 
     preRenderValueVec = thisValueVec;
     preRenderOffsetVec = thisOffsetVec;

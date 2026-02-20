@@ -52,7 +52,12 @@ namespace ttvst::helps
     // is meant to be used with last generated spline to complete the current buffer on its beggining
     vectorPairDbl positionsToSpeed(std::vector<double> positions, std::vector<double> offsets, int outN, int lookahead);
     vectorPairDbl positionsToSpeedWrapped(std::vector<double> positions, std::vector<double> offsets, int outN, int lookahead);
-    void positionsToPitchSpeedWrapped(std::vector<double>& positions, std::vector<double>& offsets, int outN);
+    void appendNewPitchWheelSpeeds(std::vector<double>& speeds,
+        std::vector<double>& speeds_offsets,
+        std::vector<double> positions,
+        std::vector<double> offsets,
+        int outN);
+    void deleteOldPitchWheelSpeeds(std::vector<double>& speeds, std::vector<double>& speed_offsets, int outN);
 
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs);
     void insertBaseSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double baseSpeed);

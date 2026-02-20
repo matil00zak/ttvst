@@ -412,33 +412,15 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
     
-    // Capture MIDI for the UI
+    // CAPTURE MIDI FOR THE UI
+
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition, bufferID);
 
     bufferID++;
-    const bool tempoMode = apvts.getRawParameterValue("TempoMode")->load();
-    //capture touchdown state
-    for (const auto meta : midiMessages)
-    {
-        const auto& m = meta.getMessage();
-        if (m.isController() && m.getControllerNumber() == 64) {
-            touchDown_ = (m.getControllerValue() >= 64);
-            if (tempoMode) {
-                if (touchDown_) {
-                    playheadOnTouchdown_ = playhead_;
-                }
-                if (!touchDown_) {
-                    playhead_ = playheadOnTouchdown_;
-                }
-            }
-
-        }
-        
-    }
 
 
-
+    //CLEAR STUFF BEFORE PROCESSING
 
     buffer.clear();
     offsets_ = {};
@@ -446,18 +428,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     //ratios_ = {};
     speeds_ = {};
     speed_offsets_ = {};
-    
-    const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
-    const bool filterOn = apvts.getRawParameterValue("FilterOn")->load();
-    const float pitchShift = apvts.getRawParameterValue("PitchShift")->load();
-    const float tauTouch = apvts.getRawParameterValue("TauTouch")->load();
-    const float tauFree = apvts.getRawParameterValue("TauFree")->load();
-    baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
-    filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
-    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load();
-    const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 8.0)) : 0.0;
-    //Snapshot loaded data
-    auto data = getLoaded(); // later check if the loading data mechanism is allocation free
+
+
+    //LOAD BASIC PARAMETERS
+
+    auto data = getLoaded();
     if (!data) return;
 
     const int srcCh = data->buffer.getNumChannels();
@@ -474,41 +449,65 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         haveLastMidi_ = false;
     }
 
+
+    //CAPTURE UI PARAMETERS
+
+    const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
+    const bool filterOn = apvts.getRawParameterValue("FilterOn")->load();
+    const float pitchShift = apvts.getRawParameterValue("PitchShift")->load();
+    const float tauTouch = apvts.getRawParameterValue("TauTouch")->load();
+    const float tauFree = apvts.getRawParameterValue("TauFree")->load();
+    baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
+    filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
+    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load();
+    const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 8.0)) : 0.0;
+    const bool tempoMode = apvts.getRawParameterValue("TempoMode")->load();
+
+
+    //DETERMINE TOUCH STATE
+    for (const auto meta : midiMessages)
+    {
+        const auto& m = meta.getMessage();
+        if (m.isController() && m.getControllerNumber() == 64) {
+            touchDown_ = (m.getControllerValue() >= 64);
+            if (tempoMode) {
+                if (touchDown_) {
+                    playheadOnTouchdown_ = playhead_;
+                }
+                if (!touchDown_) {
+                    playhead_ = playheadOnTouchdown_;
+                }
+            }
+        }
+    }
+
+
     if (touchDown_) {
         playheadOnTouchdown_ += outN * motorSpeed;
     }
 
-    //auto optOff = getPitchWheelOffsetsVector(midiMessages, 1);
-    auto optVal = getPitchWheelValueVector(midiMessages, 1);
-    if (optVal) {
-        //auto ofs = optOff.value();
-        //std::transform(ofs.begin(), ofs.end(), ofs.begin(), [outN](float val) { return val + outN; });
-        //std::vector<double >values = pitchWheelToSamplePositionVec(*optVal, scratchScale);
-        std::vector<double >values = optVal.value();
-        afterRenderOffsetVec = { (double)2 * outN - 1 };
-        afterRenderValueVec = values;
-        pitchEmptyStreak_ = 0;
+    int pitchMsgsCount = appendPitchWheelMetadata(midiMessages,
+        outN,
+        afterRenderValueVec,
+        afterRenderOffsetVec);
+    
+    for (auto m : afterRenderOffsetVec) {
+        DBG(m);
+    }
+    repairPitchWheelMetadata(outN, afterRenderValueVec, afterRenderOffsetVec, true);
+
+    if (pitchMsgsCount == 0) {
+        pitchEmptyStreak_++;
     }
     else {
-        afterRenderOffsetVec = {};
-        afterRenderValueVec = {};
-        pitchEmptyStreak_++;
-        //DBG("buffer empty");
-        //count empty buffers
-        
+        pitchEmptyStreak_ = 0;
     }
-    
 
 
-    
     // creating vectors for messages in index range: < - outN, outN > -- moving in out memory buffers
     offsets_.insert(offsets_.end(), preRenderOffsetVec.begin(), preRenderOffsetVec.end());
     offsets_.insert(offsets_.end(), thisOffsetVec.begin(), thisOffsetVec.end());
     offsets_.insert(offsets_.end(), afterRenderOffsetVec.begin(), afterRenderOffsetVec.end());
-
-    for (auto o : offsets_) {
-        DBG(o);
-    }
 
 
     values_.insert(values_.end(), preRenderValueVec.begin(), preRenderValueVec.end());
@@ -516,9 +515,12 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     values_.insert(values_.end(), afterRenderValueVec.begin(), afterRenderValueVec.end());
 
 
+
     ttvst::helps::vectorPairDbl speedinfo = positionsToSpeedWrapped(values_, offsets_, outN, 2);
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
+
+    //positionsToPitchSpeedWrapped(afterRenderValueVec, afterRenderOffsetVec, outN);
     
     speeds_ = pitchWheelToSamplePositionVec(speeds_, scratchScale);
 

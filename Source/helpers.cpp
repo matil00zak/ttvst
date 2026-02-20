@@ -259,6 +259,39 @@ namespace ttvst::helps {
     }
 
 
+    void positionsToPitchSpeedWrapped(std::vector<double>& speeds,
+        std::vector<double>& speeds_offsets,
+        std::vector<double> positions,
+        std::vector<double> offsets,
+        int outN) {
+
+        constexpr double WRAP = 16384.0;
+
+
+        if (offsets.size() > 1 && positions.size() > 1) {
+            int n = std::min(positions.size(), offsets.size());
+
+            for (int i = 0; i + 1 < n; i++) {
+                if (offsets[i + 1] > 0) {
+                    double delta_t = offsets[i + 1] - offsets[i];
+                    if (delta_t == 0.0) continue; // avoid inf/NaN
+                    double delta_pos = wrappedDelta(positions[i], positions[i + 1], WRAP);
+                    double speed = delta_pos / delta_t;
+                    speeds_offsets.push_back(offsets[i + 1]);
+                    speeds.push_back(speed);
+                }
+
+            }
+        }
+
+
+
+
+
+    }
+
+
+
 
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs) {
         for (int i = 0; i < speeds.size(); i++) {
@@ -291,7 +324,44 @@ namespace ttvst::helps {
         }
     }
 
+    
+    int appendPitchWheelMetadata(
+        const juce::MidiBuffer& buffer,
+        int outN,
+        std::vector<double>& positions,
+        std::vector<double>& offsets)
+    {
 
+        positions = {};
+        offsets = {};
+        int count = 0;
+
+        for (auto meta : buffer) {
+            if (meta.getMessage().isPitchWheel()) {
+                positions.push_back(meta.getMessage().getPitchWheelValue());
+                offsets.push_back(meta.samplePosition + outN);
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    void repairPitchWheelMetadata(int outN, std::vector<double>& positions, std::vector<double>& offsets, bool forceOneMsg) {
+
+        if (positions.size() != offsets.size() || offsets.size() == 0) {
+            positions = {};
+            offsets = {};
+            return;
+        }
+
+        if (forceOneMsg == true) {
+            positions = { positions.back() };
+            offsets = { (double) 2 * outN - 1 };
+        }
+        
+
+    }
 
 
 

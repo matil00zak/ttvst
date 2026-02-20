@@ -224,24 +224,21 @@ namespace ttvst::helps {
 
     vectorPairDbl positionsToSpeedWrapped(std::vector<double> values,
         std::vector<double> offsets,
-        int outN,
-        int lookahead)
+        int outN)
     {
         std::vector<double> speeds;
         std::vector<double> speed_offsets;
         int nextCount = 0;
 
-        // set this to your wrap size:
-        // - for MIDI pitch bend 14-bit: 16384 (values 0..16383)
         constexpr double WRAP = 16384.0;
 
         if (offsets.size() > 1 && values.size() > 1) {
             const size_t n = std::min(values.size(), offsets.size());
 
             for (size_t i = 0; i + 1 < n; i++) {
-                if (offsets[i + 1] >= 0 && nextCount < lookahead) {
+                if (offsets[i + 1] >= 0) {
                     double delta_t = offsets[i + 1] - offsets[i];
-                    if (delta_t == 0.0) continue; // avoid inf/NaN
+                    if (delta_t == 0.0) continue;
 
                     double delta_pos = wrappedDelta(values[i], values[i + 1], WRAP);
                     double speed = delta_pos / delta_t;
@@ -292,9 +289,42 @@ namespace ttvst::helps {
     }
 
 
+    void appendPitchWheelMetadata(
+        const juce::MidiBuffer& buffer,
+        int outN,
+        std::vector<double>& positions,
+        std::vector<double>& offsets) 
+    {
+
+        positions = {};
+        offsets = {};
+
+        for (auto meta : buffer) {
+            if (meta.getMessage().isPitchWheel()) {
+                positions.push_back(meta.getMessage().getPitchWheelValue());
+                offsets.push_back(meta.samplePosition + outN - 1);
+            }
+        }
+    }
+
+    void repairPitchWheelMetadata(int outN, std::vector<double>& positions, std::vector<double>& offsets, bool forceOneMsg) {
+
+        if (positions.size() != offsets.size()) {
+            positions = {};
+            offsets = {};
+            return;
+        }
 
 
+        for (int i = 0; i < offsets.size() - 1; i++) {
+            if (offsets[i] == offsets[i + 1] || forceOneMsg == true) {
+                positions = { positions.back() };
+                offsets = { (double)outN };
+                break;
+            }
+        }
 
+    }
 }
 
 

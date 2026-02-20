@@ -323,7 +323,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     lut = ttvst::lutSinc::generateLutSinc(16384,2331, 0.45);
 
     juce::File out = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-        .getChildFile("test_one_pole_4.wav");
+        .getChildFile("test_one_pole_5.wav");
 
     auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
     if (r.failed())
@@ -409,19 +409,68 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     using namespace ttvst::lutSinc;
     juce::ScopedNoDenormals _;
 
+
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
-    
-    // Capture MIDI for the UI
+
+
+
+    auto data = getLoaded();
+    if (!data) return;
+
+
+
+    //GET OutN srcN srcN srcCh
+    #pragma region GatherBufferInfo
+
+    const int srcCh = data->buffer.getNumChannels();
+    const int srcN = data->buffer.getNumSamples();
+    const int outCh = buffer.getNumChannels();
+    const int outN = buffer.getNumSamples();
+    if (srcN <= 0) return;
+
+    #pragma endregion
+
+    // LOGGING FOR THE UI
+    #pragma region Logger
+
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition, bufferID);
-
     bufferID++;
+
+    #pragma endregion 
+
+
+    buffer.clear();
+    offsets_ = {};
+    values_ = {};
+    speeds_ = {};
+    speed_offsets_ = {};
+    
+    //UI PARAMETERS UPDATE
+    #pragma region ParamsLoading
     const bool tempoMode = apvts.getRawParameterValue("TempoMode")->load();
-    //capture touchdown state
+    const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
+    const bool filterOn = apvts.getRawParameterValue("FilterOn")->load();
+    const float pitchShift = apvts.getRawParameterValue("PitchShift")->load();
+    const float tauTouch = apvts.getRawParameterValue("TauTouch")->load();
+    const float tauFree = apvts.getRawParameterValue("TauFree")->load();
+    baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
+    filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
+    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load();
+    const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 8.0)) : 0.0;
+
+
+    #pragma endregion
+    
+    //
+
+
+    //CAPTURE TOUCHDOWN
     for (const auto meta : midiMessages)
     {
         const auto& m = meta.getMessage();
+        // TOUCHDOWN CAPTURE
         if (m.isController() && m.getControllerNumber() == 64) {
             touchDown_ = (m.getControllerValue() >= 64);
             if (tempoMode) {
@@ -432,91 +481,40 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
                     playhead_ = playheadOnTouchdown_;
                 }
             }
-
         }
-        
+
     }
-
-
-
-
-    buffer.clear();
-    offsets_ = {};
-    values_ = {};
-    //ratios_ = {};
-    speeds_ = {};
-    speed_offsets_ = {};
-    
-    const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
-    const bool filterOn = apvts.getRawParameterValue("FilterOn")->load();
-    const float pitchShift = apvts.getRawParameterValue("PitchShift")->load();
-    const float tauTouch = apvts.getRawParameterValue("TauTouch")->load();
-    const float tauFree = apvts.getRawParameterValue("TauFree")->load();
-    baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
-    filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
-    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load();
-    const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 8.0)) : 0.0;
-    //Snapshot loaded data
-    auto data = getLoaded(); // later check if the loading data mechanism is allocation free
-    if (!data) return;
-
-    const int srcCh = data->buffer.getNumChannels();
-    const int srcN = data->buffer.getNumSamples();
-    const int outCh = buffer.getNumChannels();
-    const int outN = buffer.getNumSamples();
-    if (srcN <= 0) return;
 
 
     //IF HOST RESIZES BUFFER THEN DROP LAST BLOCK AND UPDATE LAST BLOCK SIZE
     if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN) {
         lastBlock_.setSize(outCh, outN, false, true, true); // potential aloocation 
-        //DBG("block resized");
-        haveLastMidi_ = false;
     }
 
     if (touchDown_) {
         playheadOnTouchdown_ += outN * motorSpeed;
     }
 
-    //auto optOff = getPitchWheelOffsetsVector(midiMessages, 1);
-    auto optVal = getPitchWheelValueVector(midiMessages, 1);
-    if (optVal) {
-        //auto ofs = optOff.value();
-        //std::transform(ofs.begin(), ofs.end(), ofs.begin(), [outN](float val) { return val + outN; });
-        //std::vector<double >values = pitchWheelToSamplePositionVec(*optVal, scratchScale);
-        std::vector<double >values = optVal.value();
-        afterRenderOffsetVec = { (double)2 * outN - 1 };
-        afterRenderValueVec = values;
-        pitchEmptyStreak_ = 0;
-    }
-    else {
-        afterRenderOffsetVec = {};
-        afterRenderValueVec = {};
-        pitchEmptyStreak_++;
-        //DBG("buffer empty");
-        //count empty buffers
-        
-    }
-    
+    //READ NEW PITCHWHEEL DATA AND CHECK SAMPLE OFFSETS
+
+    appendPitchWheelMetadata(midiMessages, outN, afterRenderValueVec, afterRenderOffsetVec);
+    repairPitchWheelMetadata(outN, afterRenderValueVec, afterRenderOffsetVec, true);
 
 
-    
     // creating vectors for messages in index range: < - outN, outN > -- moving in out memory buffers
+    #pragma region FullVectors
+
     offsets_.insert(offsets_.end(), preRenderOffsetVec.begin(), preRenderOffsetVec.end());
     offsets_.insert(offsets_.end(), thisOffsetVec.begin(), thisOffsetVec.end());
     offsets_.insert(offsets_.end(), afterRenderOffsetVec.begin(), afterRenderOffsetVec.end());
-
-    for (auto o : offsets_) {
-        DBG(o);
-    }
-
 
     values_.insert(values_.end(), preRenderValueVec.begin(), preRenderValueVec.end());
     values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
     values_.insert(values_.end(), afterRenderValueVec.begin(), afterRenderValueVec.end());
 
+    #pragma endregion
 
-    ttvst::helps::vectorPairDbl speedinfo = positionsToSpeedWrapped(values_, offsets_, outN, 2);
+    ttvst::helps::vectorPairDbl speedinfo = positionsToSpeedWrapped(values_, offsets_, outN);
     speeds_ = speedinfo.first;
     speed_offsets_ = speedinfo.second;
     
@@ -525,7 +523,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     catchSpeedOutliers(speeds_, 6.0);
 
-    // if the interpolation stream just starts, insert the last generated speed (form smoothed speed)
+    //if the interpolation stream just starts, insert the last generated speed (form smoothed speed)
     if (!splineCondition_.has_value()) {
         insertBaseSpeed(speeds_, speed_offsets_, ratioLPState);
     }
@@ -533,7 +531,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     if (speeds_.size() > 1) {
 
-        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
         alpha = alphaStageFromImpulseDecayMs(tauTouch, hostSampleRate_);
         ratios_ = {};
         splineSetPlus splineSetPlus_ = splineSpecial(speed_offsets_, speeds_, splineCondition_, 1, outN);

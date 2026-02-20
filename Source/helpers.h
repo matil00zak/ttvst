@@ -50,8 +50,10 @@ namespace ttvst::helps
     //for the interpolation to cover the whole buffer, spline set needs inserting the last
     //spline saved from previous iteration 
     // is meant to be used with last generated spline to complete the current buffer on its beggining
+    void appendPitchWheelMetadata(const juce::MidiBuffer& buffer, int outN, std::vector<double>& positions, std::vector<double>& offsets);
+    void repairPitchWheelMetadata(int outN, std::vector<double>& positions, std::vector<double>& offsets, bool forceOneMsg);
     vectorPairDbl positionsToSpeed(std::vector<double> positions, std::vector<double> offsets, int outN, int lookahead);
-    vectorPairDbl positionsToSpeedWrapped(std::vector<double> positions, std::vector<double> offsets, int outN, int lookahead);
+    vectorPairDbl positionsToSpeedWrapped(std::vector<double> positions, std::vector<double> offsets, int outN);
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs);
     void insertBaseSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double baseSpeed);
     void insertLastSpeed(std::vector<double>& speeds, std::vector<double>& offsets, double& lastSpeed, double& lastOffset, int outN);

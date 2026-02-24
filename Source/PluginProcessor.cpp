@@ -323,7 +323,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     lut = ttvst::lutSinc::generateLutSinc(16384,2331, 0.45);
 
     juce::File out = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-        .getChildFile("test_one_pole_4.wav");
+        .getChildFile("test_one_pole_7.wav");
 
     auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
     if (r.failed())
@@ -425,7 +425,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     buffer.clear();
     offsets_ = {};
     values_ = {};
-    //ratios_ = {};
+    ratios_ = {};
     //speeds_ = {};
     //speed_offsets_ = {};
 
@@ -495,7 +495,10 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     repairPitchWheelMetadata(outN, afterRenderValueVec, afterRenderOffsetVec, true);
 
     if (pitchMsgsCount == 0) {
-        pitchEmptyStreak_++;
+        if (pitchEmptyStreak_ < 5) {
+            pitchEmptyStreak_++;
+        }
+
     }
     else {
         pitchEmptyStreak_ = 0;
@@ -512,73 +515,59 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
     values_.insert(values_.end(), afterRenderValueVec.begin(), afterRenderValueVec.end());
 
-    //appending only new speeds at new offsets 
-    appendNewPitchWheelSpeeds(speeds_, speed_offsets_, values_, offsets_, outN);
 
-    //and deleting the old ones
-    deleteOldPitchWheelSpeeds(speeds_, speed_offsets_, outN);
-
-    if (speed_offsets_.size() > 0) {
-        DBG("newone");
-        for (auto s : speed_offsets_) {
-            DBG("offset" << s);
+    if (touchDown_) {
+        if (pitchEmptyStreak_ == 0) {
+            alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+            appendNewPitchWheelSpeeds(speeds_, speed_offsets_, values_, offsets_, outN, scratchScale);
+            lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
         }
+        if (pitchEmptyStreak_ == 1) {
+            alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+            lerpContinuityContinue(&speeds_, &speed_offsets_, outN);
+        }
+        if (pitchEmptyStreak_ == 2) {
+            alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
+            speeds_.push_back(lastGoodSpeed_);
+            speed_offsets_.push_back(2 * outN - 1);
+            lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
+        }
+        if (pitchEmptyStreak_ > 2) {
+            alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+            speeds_.push_back(0.0);
+            speed_offsets_.push_back(2 * outN - 1);
+        }
+    }
+    else if (!touchDown_) {
+        alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
+        speeds_.push_back(motorSpeed);
+        speed_offsets_.push_back(2 * outN - 1);
+        lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
     }
 
 
-    //scaling the speeds
-    speeds_ = pitchWheelToSamplePositionVec(speeds_, scratchScale);
+    deleteOldPitchWheelSpeeds(speeds_, speed_offsets_, outN);
 
+
+
+    //lerpContinuityContinue(&speeds_, &speed_offsets_, outN);
+    //finishes middle buffer when new buffer is empty - offsets case
+
+
+    generateRatiosVectorLERP(&ratios_, &speeds_, &speed_offsets_, outN);
     //catchSpeedOutliers(speeds_, 6.0);
+    
+    //DBG(ratios_.size() << "empty streak = " << pitchEmptyStreak_ << "speeds counf: " << speeds_.size());
 
-
-
-
-    //if (speeds_.size() > 1) {
-
-
-    //}
-    //else
-    //{
-    //    if (pitchEmptyStreak_ <= 2)
-    //    {
-    //        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_*tauFree));
-    //        alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
-    //        ratios_ = linearContinuationFromLastSlope(ratios_, outN);
-    //        lastSpline = {};
-    //        splineSet_ = {};
-    //        splineCondition_.reset();
-    //    }
-    //    else if (pitchEmptyStreak_ == 3 && touchDown_)
-    //    {
-    //        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
-    //        alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
-    //        ratios_.assign(outN, 0.0);
-
-    //    }
-    //    else if (pitchEmptyStreak_ > 3 && touchDown_)
-    //    {
-    //        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauTouch));
-    //        alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
-    //        ratios_.assign(outN, 0.0);
-
-    //    }
-    //    else
-    //    {
-    //        //alpha = 1.0 - std::exp(-1.0 / (hostSampleRate_ * tauFree));
-    //        alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
-    //        ratios_.assign(outN, motorSpeed);
-
-    //    }
-    //}
 
 
     if (ratios_.size() == outN) {
-        logger.pushFromAudioThread(buffer, ratios_);
-        smoothRatios(ratios_, alpha);
+
         if (!ratios_.empty() && std::isfinite(ratios_.back())) {
             lastGoodSpeed_ = ratios_.back();
         }
+        smoothRatios(ratios_, alpha);
+
         float cutofff;
         const float* lutPtr = lut.data();
         for (int i = 0; i < outN; i++){
@@ -609,7 +598,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     }
     else {
-        //DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON");
         for (int i = 0; i < outN; i++) {
             wrapPlayhead(playhead_, srcN);
             auto index0 = (unsigned long)playhead_;
@@ -620,6 +609,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             playhead_ += 1;
         }
     }
+
+    logger.pushFromAudioThread(buffer, ratios_);
 
     //append_vector_csv("test_csv.csv", ratios_, 16);
 

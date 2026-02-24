@@ -56,7 +56,8 @@ namespace ttvst::helps
         std::vector<double>& speeds_offsets,
         std::vector<double> positions,
         std::vector<double> offsets,
-        int outN);
+        int outN,
+        double scale);
     void deleteOldPitchWheelSpeeds(std::vector<double>& speeds, std::vector<double>& speed_offsets, int outN);
 
     void catchSpeedOutliers(std::vector<double>& speeds, double maxSpeedAbs);
@@ -76,5 +77,12 @@ namespace ttvst::helps
 
     void repairPitchWheelMetadata(int outN, std::vector<double>& positions, std::vector<double>& offsets, bool forceOneMsg);
 
+    void generateRatiosVectorLERP(std::vector<double>* ratios, std::vector<double>* speeds, std::vector<double>* offsets, int outN);
 
+    // handles one buffer missing messages if the lookahead recieved new messages in case of host not delivering offsets
+    void lerpContinuityRestore(std::vector<double>* speeds, std::vector<double>* offsets, int outN);
+
+    void lerpContinuityContinue(std::vector<double>* speeds, std::vector<double>* offsets, int outN);
+
+    void insertStartPoint(std::vector<double>* speeds, std::vector<double>* offsets, int outN, double baseSpeed);
 } // namespace ttvst::midi

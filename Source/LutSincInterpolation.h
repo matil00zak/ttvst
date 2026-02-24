@@ -72,13 +72,13 @@ namespace ttvst::lutSinc
 
         for (int p = 0; p < P; ++p)
         {
-            const double alpha = static_cast<double>(p) / static_cast<double>(P); // [0,1)
+            const double alpha = static_cast<double>(p) / static_cast<double>(P); // [0,1) faza
             double sum = 0.0;
 
             for (int tap = 0; tap < N; ++tap)
             {
-                const int k = tap - ((N - 1) / 2);             // integer offset [-K..K]
-                const double u = static_cast<double>(k) - alpha; // fractional offset
+                const int k = tap - ((N - 1) / 2);             // pozycja wspolczynnika od -k do k
+                const double u = static_cast<double>(k) - alpha; // przesuniecie sinca o frakcje alpha
 
                 // "Fractionally shifted" window index:
                 // tap is 0..N-1, shift by alpha so window aligns with the fractional delay.

@@ -263,7 +263,8 @@ namespace ttvst::helps {
         std::vector<double>& speeds_offsets,
         std::vector<double> positions,
         std::vector<double> offsets,
-        int outN) {
+        int outN,
+        double scale) {
 
         constexpr double WRAP = 16384.0;
 
@@ -278,7 +279,7 @@ namespace ttvst::helps {
                     double delta_pos = wrappedDelta(positions[i], positions[i + 1], WRAP);
                     double speed = delta_pos / delta_t;
                     speeds_offsets.push_back(offsets[i + 1]);
-                    speeds.push_back(speed);
+                    speeds.push_back((speed / 16383.0) * scale * 48000.0);
                 }
 
             }
@@ -401,7 +402,191 @@ namespace ttvst::helps {
 
     }
 
+    void generateRatiosVectorLERP(std::vector<double>* ratios, std::vector<double>* speeds, std::vector<double>* offsets, int outN) {
 
+        // check if discrete vectors are ok for interpolation
+        if (speeds->size() != offsets->size() || offsets->size() < 2 || speeds->size() < 2) {
+            ratios = {};
+            return;
+        }
+
+        const int nPts = static_cast<int>(offsets->size());
+
+       
+        //check for wrong not increasing offsets
+        for (int i = 0; i + 1 < nPts; ++i) {
+            if ((*offsets)[i + 1] <= (*offsets)[i]) {
+                return;
+            }
+        }
+
+        // check for sufficient range
+        if ((*offsets).front() > 0.0 || (*offsets).back() < static_cast<double>(outN - 1)) {
+            return;
+        }
+
+        std::vector<double> lerp_ratios(outN, 0.0);
+
+        // interpolate segments
+        for (int i = 0; i + 1 < nPts; i++) {
+            const double x0 = (*offsets)[i];
+            const double x1 = (*offsets)[i + 1];
+            const double y0 = (*speeds)[i];
+            const double y1 = (*speeds)[i + 1];
+
+            const double dx = x1 - x0;
+
+
+            int startIdx = static_cast<int>(std::ceil(x0));
+            int endIdx = static_cast<int>(std::floor(x1));
+
+            //check if segment is in range
+            if (endIdx < 0 || startIdx > outN - 1) {
+                continue; 
+            }
+
+            if (startIdx < 0) startIdx = 0;
+            if (endIdx > outN - 1) endIdx = outN - 1;
+
+            for (int x = startIdx; x <= endIdx; ++x) {
+                const double t = (static_cast<double>(x) - x0) / dx; // 0..1 across segment
+                lerp_ratios[x] = y0 + t * (y1 - y0);
+            }
+        }
+
+        *ratios = std::move(lerp_ratios);
+    }
+
+    void lerpContinuityRestore(std::vector<double>* speeds, std::vector<double>* offsets, int outN) {
+        if (!speeds || !offsets || outN <= 0) {
+            return;
+        }
+
+        if (speeds->size() != offsets->size() || offsets->size() < 2) {
+            return;
+        }
+
+        // NOTE: This assumes offsets are sorted ascending.
+        // If they may not be sorted, remove this check or sort first.
+        if (offsets->front() > 0.0 || offsets->back() < static_cast<double>(outN - 1)) {
+            return;
+        }
+
+        double pre_x = 0.0, pre_y = 0.0;
+        double after_x = 0.0, after_y = 0.0;
+        int insertIndex = -1;
+
+        bool foundPre = false;
+        bool foundAfter = false;
+
+        for (int i = 0; i < static_cast<int>(offsets->size()); i++) {
+            const double x = (*offsets)[i];
+            const double y = (*speeds)[i];
+
+            // If any point is already inside [0, outN-1], do nothing
+            if (x >= 0.0 && x < static_cast<double>(outN)) {
+                return;
+            }
+
+            // Keep updating "pre" so we end up with the last point before 0
+            if (x < 0.0) {
+                pre_x = x;
+                pre_y = y;
+                foundPre = true;
+                continue;
+            }
+
+            // First point at or after outN is our "after"
+            if (x >= static_cast<double>(outN)) {
+                after_x = x;
+                after_y = y;
+                insertIndex = i;
+                foundAfter = true;
+                break;
+            }
+        }
+
+        if (!(foundPre && foundAfter)) {
+            return;
+        }
+
+        const double xTarget = static_cast<double>(outN - 1);
+
+        // Safety: avoid division by zero
+        const double dx = after_x - pre_x;
+        if (dx == 0.0) {
+            return;
+        }
+
+        const double t = (xTarget - pre_x) / dx;
+        const double yTarget = pre_y + t * (after_y - pre_y);
+
+        speeds->insert(speeds->begin() + insertIndex, yTarget);
+        offsets->insert(offsets->begin() + insertIndex, xTarget);
+        DBG("inserted middle point");
+    }
+
+    void lerpContinuityContinue(std::vector<double>* speeds, std::vector<double>* offsets, int outN) {
+        if (!speeds || !offsets || outN <= 0) {
+            return;
+        }
+
+        if (speeds->size() != offsets->size() || offsets->size() < 2) {
+            return;
+        }
+
+        // NOTE: This assumes offsets are sorted ascending.
+        // If they may not be sorted, remove this check or sort first.
+        if (offsets->front() > 0.0 || offsets->back() >= outN - 1) {
+            return;
+        }
+
+        double x_1 = offsets->back();
+        double y_1 = speeds->back();
+        double x_0 = *(offsets->end() - 2);
+        double y_0 = *(speeds->end() - 2);
+             
+        const double xTarget = static_cast<double>(outN - 1);
+
+        // Safety: avoid division by zero
+        const double dx = x_1 - x_0;
+        if (dx == 0.0) {
+            return;
+        }
+
+        const double t = (xTarget - x_1) / dx;
+        const double yTarget = y_1 + t * (y_1 - y_0);
+
+        speeds->push_back(yTarget);
+        offsets->push_back(xTarget);
+        DBG("inserted end point");
+
+        
+    }
+
+    void insertStartPoint(std::vector<double>* speeds, std::vector<double>* offsets, int outN, double baseSpeed) {
+
+        if (!speeds || !offsets || outN <= 0) {
+            return;
+        }
+
+        if (speeds->size() != offsets->size() || offsets->size() < 1) {
+            return;
+        }
+
+        int notPositiveCount = 0;
+
+        for (auto o : *offsets) {
+            if (o < 1) {
+                notPositiveCount++;
+            }
+        }
+
+        if (notPositiveCount == 0) {
+            offsets->insert(offsets->begin(), 0.0);
+            speeds->insert(speeds->begin(), baseSpeed);
+        }
+    }
 
 }
 

@@ -323,7 +323,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     lut = ttvst::lutSinc::generateLutSinc(16384,2331, 0.45);
 
     juce::File out = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-        .getChildFile("test_one_pole_7.wav");
+        .getChildFile("test_one_pole_8.wav");
 
     auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
     if (r.failed())
@@ -518,30 +518,30 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
     if (touchDown_) {
         if (pitchEmptyStreak_ == 0) {
-            alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             appendNewPitchWheelSpeeds(speeds_, speed_offsets_, values_, offsets_, outN, scratchScale);
             lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
         }
         if (pitchEmptyStreak_ == 1) {
-            alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             lerpContinuityContinue(&speeds_, &speed_offsets_, outN);
         }
         if (pitchEmptyStreak_ == 2) {
-            alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
+            alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
             speeds_.push_back(lastGoodSpeed_);
             speed_offsets_.push_back(2 * outN - 1);
             lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
         }
         if (pitchEmptyStreak_ > 2) {
-            alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
+            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             speeds_.push_back(0.0);
             speed_offsets_.push_back(2 * outN - 1);
         }
     }
     else if (!touchDown_) {
-        alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
+        alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
         speeds_.push_back(motorSpeed);
-        speed_offsets_.push_back(2 * outN - 1);
+        speed_offsets_.push_back(outN);
         lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
     }
 
@@ -566,6 +566,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         if (!ratios_.empty() && std::isfinite(ratios_.back())) {
             lastGoodSpeed_ = ratios_.back();
         }
+        logger.pushFromAudioThread(buffer, ratios_);
         smoothRatios(ratios_, alpha);
 
         float cutofff;
@@ -610,7 +611,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
     }
 
-    logger.pushFromAudioThread(buffer, ratios_);
+    //logger.pushFromAudioThread(buffer, ratios_);
 
     //append_vector_csv("test_csv.csv", ratios_, 16);
 

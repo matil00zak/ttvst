@@ -322,8 +322,10 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
 
     lut = ttvst::lutSinc::generateLutSinc(16384,2331, 0.45);
 
-    juce::File out = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-        .getChildFile("test_one_pole_8.wav");
+    juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
+        .getChildFile("test_4_4_ch.wav");
+
+    DBG("logger file: " + out.getFullPathName());
 
     auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
     if (r.failed())
@@ -396,7 +398,7 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
 }
 
 double PluginTestowy2AudioProcessor::getPlayheadSeconds() const {
-    return playhead_ / getSampleRate();
+    return playhead_ / fileSR;//getSampleRate();
 }
 int PluginTestowy2AudioProcessor::getFileSR() const {
     return fileSR;
@@ -426,6 +428,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     offsets_ = {};
     values_ = {};
     ratios_ = {};
+    ratios_before = {};
     //speeds_ = {};
     //speed_offsets_ = {};
 
@@ -541,13 +544,16 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     else if (!touchDown_) {
         alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
         speeds_.push_back(motorSpeed);
-        speed_offsets_.push_back(outN);
+        speed_offsets_.push_back(2 * outN - 1);
         lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
     }
 
 
     deleteOldPitchWheelSpeeds(speeds_, speed_offsets_, outN);
 
+    for (int i = 0; i < speeds_.size(); i++) {
+        DBG("off: " << speed_offsets_[i] << "speed: " << speeds_[i]);
+    }
 
 
     //lerpContinuityContinue(&speeds_, &speed_offsets_, outN);
@@ -566,9 +572,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         if (!ratios_.empty() && std::isfinite(ratios_.back())) {
             lastGoodSpeed_ = ratios_.back();
         }
-        logger.pushFromAudioThread(buffer, ratios_);
+        ratios_before = ratios_;
         smoothRatios(ratios_, alpha);
-
+        
         float cutofff;
         const float* lutPtr = lut.data();
         for (int i = 0; i < outN; i++){
@@ -596,7 +602,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             cutofff = cutoffClamped;
             playhead_ += ratios_[i];
         }
-
+        logger.pushFromAudioThread(buffer, ratios_, ratios_before);
     }
     else {
         DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON");
@@ -619,6 +625,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     
     // preparing the message vectors for the next buffer and update, so when it comes everything is in the desired range
     // relative 0 at the middle buffer start
+    
     std::transform(afterRenderOffsetVec.begin(), afterRenderOffsetVec.end(), afterRenderOffsetVec.begin(),
         [outN](float val) { return val - outN; });
     

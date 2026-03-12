@@ -219,7 +219,6 @@ namespace ttvst::helps {
         if (d > half) d -= wrap;
         if (d < -half) d += wrap;
         return d;
-        DBG("delta:%d", d);
     }
 
     vectorPairDbl positionsToSpeedWrapped(std::vector<double> values,
@@ -275,7 +274,7 @@ namespace ttvst::helps {
             for (int i = 0; i + 1 < n; i++) {
                 if (offsets[i + 1] > outN - 1) {
                     double delta_t = offsets[i + 1] - offsets[i];
-                    if (delta_t == 0.0) continue; // avoid inf/NaN
+                    if (delta_t == 0.0) continue;
                     double delta_pos = wrappedDelta(positions[i], positions[i + 1], WRAP);
                     double speed = delta_pos / delta_t;
                     speeds_offsets.push_back(offsets[i + 1]);

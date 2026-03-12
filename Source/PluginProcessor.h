@@ -91,7 +91,7 @@ private:
     std::shared_ptr<const LoadedAudio> loaded_;                                     // loaded audio ptr
     ttvst::MidiMessageManager midiLog_;                                             // logs container
     std::vector<double> offsets_, values_;                                          // contains all avilable msgs data, just storage, dbg
-    std::vector<double> speeds_, speed_offsets_, ratios_;                           // crucial very important data, base for generation
+    std::vector<double> speeds_, speed_offsets_, ratios_, ratios_before;                           // crucial very important data, base for generation
     double lastSpeed, lastOffset;                                                   // data for the empty buffers // patches MIDI stream interruption
     int emptyBuffersCount;
     double hostSampleRate_;

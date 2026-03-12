@@ -13,7 +13,7 @@ public:
         // Pre-allocate blocks
         for (auto& b : blocks)
         {
-            b.buffer.setSize(3, (int) maxBlockSize, false, false, true);
+            b.buffer.setSize(4, (int) maxBlockSize, false, false, true);
             b.numSamples = 0;
         }
     }
@@ -49,7 +49,7 @@ public:
         //writer.reset(wav.createWriterFor(stream.get(), sampleRate, 3, bitsPerSample, {}, 0));
         writer.reset(wav.createWriterFor(stream.get(),
             sampleRate,
-            3,
+            4,
             32,      // 32-bit
             {}, 0));
         if (! writer)
@@ -60,7 +60,7 @@ public:
 
         shouldRun.store(true, std::memory_order_release);
         startThread(juce::Thread::Priority::low);
-
+        //DBG("Logger file: " + outFile.getFullPathName());
         return juce::Result::ok();
     }
 
@@ -88,7 +88,8 @@ public:
     // - no file I/O
     // Returns false if FIFO is full (data dropped).
     bool pushFromAudioThread(const juce::AudioBuffer<float>& stereoBuffer,
-                             const std::vector<double>& thirdChannelVector)
+                             const std::vector<double>& thirdChannelVector,
+                             const std::vector<double>& fourthChannelVector)
     {
         if (! isRunning())
             return false;
@@ -106,13 +107,15 @@ public:
         while (offset < numSamples)
         {
             const int chunk = juce::jmin((int) maxBlockSize, numSamples - offset);
-            if (! pushChunk(stereoBuffer, thirdChannelVector, offset, chunk))
+            if (! pushChunk(stereoBuffer, thirdChannelVector, fourthChannelVector, offset, chunk))
                 return false; // FIFO full; remaining dropped
             offset += chunk;
         }
 
         return true;
     }
+
+
 
 private:
     struct Block
@@ -126,6 +129,7 @@ private:
 
     bool pushChunk(const juce::AudioBuffer<float>& stereoBuffer,
                    const std::vector<double>& thirdChannelVector,
+                   const std::vector<double>& fourthChannelVector,
                    int srcOffset,
                    int chunkSamples)
     {
@@ -143,18 +147,26 @@ private:
         b.buffer.copyFrom(1, 0, stereoBuffer, channelMap[1], srcOffset, chunkSamples);
 
         // ch2 from vector (aligned per-sample)
-        const int vecN = (int) thirdChannelVector.size();
+        const int vecN3 = (int) thirdChannelVector.size();
+        const int vecN4 = (int)fourthChannelVector.size();
+
         float* ch2 = b.buffer.getWritePointer(2);
+        float* ch3 = b.buffer.getWritePointer(3);
 
         for (int i = 0; i < chunkSamples; ++i)
         {
             const int idx = srcOffset + i;
-            float v = 0.0f;
+            float v3 = 0.0f;
+            float v4 = 0.0f;
 
-            if (idx < vecN)
-                v = (float) thirdChannelVector[(size_t) idx];
+            if (idx < vecN3)
+                v3 = (float) thirdChannelVector[(size_t) idx];
 
-            ch2[i] = v;
+            if (idx < vecN4)
+                v4 = (float)fourthChannelVector[(size_t)idx];
+
+            ch2[i] = v3;
+            ch3[i] = v4;
         }
 
         fifo.finishedWrite(1);

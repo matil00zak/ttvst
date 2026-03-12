@@ -274,10 +274,11 @@ void PluginTestowy2AudioProcessorEditor::resized() {
         .withCentre(contentC.getCentre());
 
     pitchShiftSlider.setBounds(s4Bounds);
-    auto cont = areaTopB;
+    auto cont = r;
     contentB = cont.removeFromBottom(areaTopB.getHeight() / 3).reduced(12);
     contentD = areaBottom.reduced(12);
     waveformArea = contentD;
+    //midiMonitor.setBounds(areaTopB);
 
     {
         auto inner = contentB.reduced(8);
@@ -368,22 +369,22 @@ void PluginTestowy2AudioProcessorEditor::resized() {
  void PluginTestowy2AudioProcessorEditor::timerCallback()
  {
 
-    repaint();
-    //std::vector<ttvst::MidiEvent> events;
-    //audioProcessor.getMidiLog().drainTo(events);
-    //
-    //if (events.empty()) return;m
-    
-    // Append new lines to our fixed-size buffer
-    //for (const auto& e : events)
-    //    //midiLines.add(e.toString());
-    //    DBG(e.toString());
-    
-    //// Trim to last kMaxLines
-    //if (midiLines.size() > kMaxLines)
-    //    midiLines.removeRange(0, midiLines.size() - kMaxLines);
-    //
-    //// Re-render (small list, so full rewrite is fine)
-    //midiMonitor.setText(midiLines.joinIntoString("\n"), false);
-    //midiMonitor.moveCaretToEnd();
- }
+ //   repaint();
+ //   std::vector<ttvst::MidiEvent> events;
+ //   audioProcessor.getMidiLog().drainTo(events);
+ //   
+ //   if (events.empty()) return;
+ //   
+ //   //Append new lines to our fixed-size buffer
+ //   for (const auto& e : events)
+ //       //midiLines.add(e.toString());
+ //       DBG(e.toString());
+ //   
+ //   // Trim to last kMaxLines
+ //   if (midiLines.size() > kMaxLines)
+ //       midiLines.removeRange(0, midiLines.size() - kMaxLines);
+ //   
+ //   // Re-render (small list, so full rewrite is fine)
+ //   midiMonitor.setText(midiLines.joinIntoString("\n"), false);
+ //   midiMonitor.moveCaretToEnd();
+ //}

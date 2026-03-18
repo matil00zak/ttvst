@@ -278,7 +278,7 @@ namespace ttvst::helps {
                     double delta_pos = wrappedDelta(positions[i], positions[i + 1], WRAP);
                     double speed = delta_pos / delta_t;
                     speeds_offsets.push_back(offsets[i + 1]);
-                    speeds.push_back((speed / 16383.0) * scale * 48000.0);
+                    speeds.push_back((speed / 16383.0) * scale);
                 }
 
             }

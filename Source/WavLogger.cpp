@@ -13,7 +13,7 @@ public:
         // Pre-allocate blocks
         for (auto& b : blocks)
         {
-            b.buffer.setSize(4, (int) maxBlockSize, false, false, true);
+            b.buffer.setSize(5, (int) maxBlockSize, false, false, true);
             b.numSamples = 0;
         }
     }
@@ -49,7 +49,7 @@ public:
         //writer.reset(wav.createWriterFor(stream.get(), sampleRate, 3, bitsPerSample, {}, 0));
         writer.reset(wav.createWriterFor(stream.get(),
             sampleRate,
-            4,
+            5,
             32,      // 32-bit
             {}, 0));
         if (! writer)
@@ -89,7 +89,8 @@ public:
     // Returns false if FIFO is full (data dropped).
     bool pushFromAudioThread(const juce::AudioBuffer<float>& stereoBuffer,
                              const std::vector<double>& thirdChannelVector,
-                             const std::vector<double>& fourthChannelVector)
+                             const std::vector<double>& fourthChannelVector,
+                             const std::vector<double>& fifthChannelVector)
     {
         if (! isRunning())
             return false;
@@ -107,7 +108,7 @@ public:
         while (offset < numSamples)
         {
             const int chunk = juce::jmin((int) maxBlockSize, numSamples - offset);
-            if (! pushChunk(stereoBuffer, thirdChannelVector, fourthChannelVector, offset, chunk))
+            if (! pushChunk(stereoBuffer, thirdChannelVector, fourthChannelVector, fifthChannelVector, offset, chunk))
                 return false; // FIFO full; remaining dropped
             offset += chunk;
         }
@@ -130,6 +131,7 @@ private:
     bool pushChunk(const juce::AudioBuffer<float>& stereoBuffer,
                    const std::vector<double>& thirdChannelVector,
                    const std::vector<double>& fourthChannelVector,
+                   const std::vector<double>& fifthChannelVector,
                    int srcOffset,
                    int chunkSamples)
     {
@@ -149,15 +151,17 @@ private:
         // ch2 from vector (aligned per-sample)
         const int vecN3 = (int) thirdChannelVector.size();
         const int vecN4 = (int)fourthChannelVector.size();
-
+        const int vecN5 = (int)fifthChannelVector.size();
         float* ch2 = b.buffer.getWritePointer(2);
         float* ch3 = b.buffer.getWritePointer(3);
+        float* ch4 = b.buffer.getWritePointer(4);
 
         for (int i = 0; i < chunkSamples; ++i)
         {
             const int idx = srcOffset + i;
             float v3 = 0.0f;
             float v4 = 0.0f;
+            float v5 = 0.0f;
 
             if (idx < vecN3)
                 v3 = (float) thirdChannelVector[(size_t) idx];
@@ -165,8 +169,12 @@ private:
             if (idx < vecN4)
                 v4 = (float)fourthChannelVector[(size_t)idx];
 
+            if (idx < vecN5)
+                v5 = (float)fifthChannelVector[(size_t)idx];
+
             ch2[i] = v3;
             ch3[i] = v4;
+            ch4[i] = v5;
         }
 
         fifo.finishedWrite(1);

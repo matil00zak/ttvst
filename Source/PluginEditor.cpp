@@ -57,10 +57,10 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
                 });
         };
 
-    addAndMakeVisible(clearLogButton);
-    clearLogButton.onClick = [this]() {
-        midiMonitor.clear();
-    };
+    //addAndMakeVisible(clearLogButton);
+    //clearLogButton.onClick = [this]() {
+    //    midiMonitor.clear();
+    //};
 
     addAndMakeVisible(motorButton);
     motorButton.setButtonText("Motor");
@@ -142,13 +142,13 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
     );
 
     // MIDI monitor setup
-    midiMonitor.setMultiLine(true);
-    midiMonitor.setReadOnly(true);
-    midiMonitor.setScrollbarsShown(true);
-    midiMonitor.setCaretVisible(false);
-    midiMonitor.setFont(juce::FontOptions(13.0f));
-    addAndMakeVisible(midiMonitor);
-    
+    //midiMonitor.setMultiLine(true);
+    //midiMonitor.setReadOnly(true);
+    //midiMonitor.setScrollbarsShown(true);
+    //midiMonitor.setCaretVisible(false);
+    //midiMonitor.setFont(juce::FontOptions(13.0f));
+    //addAndMakeVisible(midiMonitor);
+    //
 
 
     setupKnob(tauFreeSlider);
@@ -274,7 +274,7 @@ void PluginTestowy2AudioProcessorEditor::resized() {
         .withCentre(contentC.getCentre());
 
     pitchShiftSlider.setBounds(s4Bounds);
-    auto cont = r;
+    auto cont = areaTopB;
     contentB = cont.removeFromBottom(areaTopB.getHeight() / 3).reduced(12);
     contentD = areaBottom.reduced(12);
     waveformArea = contentD;
@@ -369,7 +369,7 @@ void PluginTestowy2AudioProcessorEditor::resized() {
  void PluginTestowy2AudioProcessorEditor::timerCallback()
  {
 
- //   repaint();
+      repaint();
  //   std::vector<ttvst::MidiEvent> events;
  //   audioProcessor.getMidiLog().drainTo(events);
  //   
@@ -387,4 +387,4 @@ void PluginTestowy2AudioProcessorEditor::resized() {
  //   // Re-render (small list, so full rewrite is fine)
  //   midiMonitor.setText(midiLines.joinIntoString("\n"), false);
  //   midiMonitor.moveCaretToEnd();
- //}
+ }

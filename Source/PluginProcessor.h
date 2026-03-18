@@ -19,8 +19,7 @@
 #include "CascadedOnePoleLPF.h"
 
 //==============================================================================
-/**
-*/
+
 
 
 
@@ -86,12 +85,18 @@ public:
 private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginTestowy2AudioProcessor)
+    bool force_one_msg, check_offsets;
+    int zerroes = 0;
+    juce::dsp::IIR::Filter<float> hpLeft;
+    juce::dsp::IIR::Filter<float> hpRight;
+    //juce::dsp::IIR::Coefficients< float >::Ptr Coeffs;
     juce::AudioProcessorValueTreeState apvts;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     std::shared_ptr<const LoadedAudio> loaded_;                                     // loaded audio ptr
     ttvst::MidiMessageManager midiLog_;                                             // logs container
     std::vector<double> offsets_, values_;                                          // contains all avilable msgs data, just storage, dbg
-    std::vector<double> speeds_, speed_offsets_, ratios_, ratios_before;                           // crucial very important data, base for generation
+    std::vector<double> speeds_, speed_offsets_, ratios_, ratios_before, touch_vec, no_touch_vec;
+    // crucial very important data, base for generation
     double lastSpeed, lastOffset;                                                   // data for the empty buffers // patches MIDI stream interruption
     int emptyBuffersCount;
     double hostSampleRate_;
@@ -106,7 +111,7 @@ private:
     double tau, alpha;
     //std::atomic<int> debugEvent{ 0 };
     // inertia parameters
-
+    double sampleRateRatio = 1.0;
     juce::AudioBuffer<float> lastBlock_;                                            // should be used to detect buffer size change. to do.
     juce::MidiBuffer lastMidi_;                                                     // midi messages contariner. in use
     bool haveLastMidi_ = false;                                                     // old functionality. 

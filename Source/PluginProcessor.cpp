@@ -9,7 +9,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <thread>
-#include <cstring> // memcpy (gdyby bylo potrzebne w innych wariantach)
+#include <cstring>
 #include <juce_audio_formats/codecs/flac/format.h>
 #include <pluginterfaces/base/ftypes.h>
 #include <wtypes.h>
@@ -18,6 +18,9 @@
 #include "cubicSplines.h"
 #include "LutSincInterpolation.h"
 #include "WavLogger.cpp"
+
+
+
 //==============================================================================
 //using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
 struct Seg { int offset = 0; int value  = 0; };
@@ -296,6 +299,19 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+    juce::dsp::ProcessSpec spec;
+    spec.sampleRate = sampleRate;
+    spec.maximumBlockSize = samplesPerBlock;
+    spec.numChannels = 1; // mono filter – u¿yjesz osobnego dla L i R
+
+    hpLeft.prepare(spec);
+    hpRight.prepare(spec);
+
+    auto coeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass(sampleRate, 20.0f);
+    hpLeft.coefficients = coeffs;
+    hpRight.coefficients = coeffs;
+    force_one_msg = false;
+    check_offsets = false;
     maxEventsPerBlock = 128;
     afterRenderOffsetVec.reserve(maxEventsPerBlock);
     afterRenderValueVec.reserve(maxEventsPerBlock);
@@ -310,7 +326,8 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     tau = 0.07;
     alpha = 1.0 - std::exp(-1.0 / (sampleRate * tau));
     splineCondition_.reset();
-
+    touch_vec = std::vector<double>(samplesPerBlock, 1.0);
+    no_touch_vec = std::vector<double>(samplesPerBlock, 0.0);
     lpfLeft.prepare(sampleRate);
     lpfRight.prepare(sampleRate);
     baseCutoff = 12000.0f;
@@ -320,10 +337,13 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
 
     bufferID = 0;
 
-    lut = ttvst::lutSinc::generateLutSinc(16384,2331, 0.45);
+    //lut = ttvst::lutSinc::generateLutSinc(512,27, 0.5);
+    lut = ttvst::lutSinc::generateLutSinc(4096, 4095, 0.40);
 
+    //juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
+    //    .getChildFile("test_saw_48_410_4096_4095_04_f0_s_1_acc.wav");
     juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
-        .getChildFile("test_4_4_ch.wav");
+        .getChildFile("test_saw_48_410_her_f0_s_1_acc.wav");
 
     DBG("logger file: " + out.getFullPathName());
 
@@ -386,6 +406,7 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
                 
                 std::shared_ptr<const LoadedAudio> published = std::move(data);
                 fileSR = published ->sampleRate;
+                sampleRateRatio = fileSR / hostSampleRate_;
                 std::atomic_store_explicit(&loaded_, published, std::memory_order_release);
 
                 //DBG("LOADEDD");
@@ -462,8 +483,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const float tauFree = apvts.getRawParameterValue("TauFree")->load();
     baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
     filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
-    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load();
-    const double motorSpeed = motorOn ? (1.0 + (1.0 * pitchShift / 8.0)) : 0.0;
+    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load() * fileSR * sampleRateRatio * 9.0 / 5.0;
+    const double motorSpeed = motorOn ? (sampleRateRatio+(sampleRateRatio * pitchShift / 100.0))*1.1 : 0.0;
     const bool tempoMode = apvts.getRawParameterValue("TempoMode")->load();
 
 
@@ -493,9 +514,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         outN,
         afterRenderValueVec,
         afterRenderOffsetVec);
+    DBG(pitchMsgsCount);
     
-
-    repairPitchWheelMetadata(outN, afterRenderValueVec, afterRenderOffsetVec, true);
+    repairPitchWheelMetadata(outN, afterRenderValueVec, afterRenderOffsetVec, force_one_msg);
+    
+    
 
     if (pitchMsgsCount == 0) {
         if (pitchEmptyStreak_ < 5) {
@@ -512,7 +535,36 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     offsets_.insert(offsets_.end(), preRenderOffsetVec.begin(), preRenderOffsetVec.end());
     offsets_.insert(offsets_.end(), thisOffsetVec.begin(), thisOffsetVec.end());
     offsets_.insert(offsets_.end(), afterRenderOffsetVec.begin(), afterRenderOffsetVec.end());
+    
+    //if (check_offsets) {
+    //    if (afterRenderOffsetVec.size() > 0) {
+    //        for (auto o : afterRenderOffsetVec) {
+    //            if (o == 0) {
+    //                zerroes--;
+    //            }
+    //            else {
+    //                zerroes++;
+    //            }
+    //        }
+    //        if (zerroes < -10) {
+    //            force_one_msg = true;
+    //            afterRenderOffsetVec.clear();
+    //            afterRenderValueVec.clear();
+    //            check_offsets = false;
+    //            //DBG("checked");
 
+    //        }
+    //        if (zerroes > 10) {
+    //            force_one_msg = false;
+    //            afterRenderOffsetVec.clear();
+    //            afterRenderValueVec.clear();
+    //            check_offsets = false;
+    //            //DBG("checked");
+    //        }
+    //        //DBG("eyo");
+    //        return;
+    //    }
+    //}
 
     values_.insert(values_.end(), preRenderValueVec.begin(), preRenderValueVec.end());
     values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
@@ -520,51 +572,36 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
 
     if (touchDown_) {
+        alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
         if (pitchEmptyStreak_ == 0) {
-            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             appendNewPitchWheelSpeeds(speeds_, speed_offsets_, values_, offsets_, outN, scratchScale);
             lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
         }
         if (pitchEmptyStreak_ == 1) {
-            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             lerpContinuityContinue(&speeds_, &speed_offsets_, outN);
         }
         if (pitchEmptyStreak_ == 2) {
-            alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
             speeds_.push_back(lastGoodSpeed_);
-            speed_offsets_.push_back(2 * outN - 1);
+            speed_offsets_.push_back(2*outN - 1);
             lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
         }
         if (pitchEmptyStreak_ > 2) {
-            alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
             speeds_.push_back(0.0);
             speed_offsets_.push_back(2 * outN - 1);
+            lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
         }
     }
     else if (!touchDown_) {
         alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
+        //appendNewPitchWheelSpeeds(speeds_, speed_offsets_, values_, offsets_, outN, scratchScale);
         speeds_.push_back(motorSpeed);
         speed_offsets_.push_back(2 * outN - 1);
         lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
     }
 
-
     deleteOldPitchWheelSpeeds(speeds_, speed_offsets_, outN);
 
-    for (int i = 0; i < speeds_.size(); i++) {
-        DBG("off: " << speed_offsets_[i] << "speed: " << speeds_[i]);
-    }
-
-
-    //lerpContinuityContinue(&speeds_, &speed_offsets_, outN);
-    //finishes middle buffer when new buffer is empty - offsets case
-
-
     generateRatiosVectorLERP(&ratios_, &speeds_, &speed_offsets_, outN);
-    //catchSpeedOutliers(speeds_, 6.0);
-    
-    //DBG(ratios_.size() << "empty streak = " << pitchEmptyStreak_ << "speeds counf: " << speeds_.size());
-
 
 
     if (ratios_.size() == outN) {
@@ -587,14 +624,14 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
             for (int ch = 0; ch < outCh; ch++){
                 
-                //float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
-                float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 16384, 2331);
+                float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
+                //float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 4096, 4095);
                 //float out = interpolateLinear(data->buffer, ch, playhead_, srcN);
-                if (filterOn){
+                //if (filterOn){
 
-                    out = (ch == 0) ? lpfLeft.processSample(out, cutoffClamped)
-                                    : lpfRight.processSample(out, cutoffClamped);
-                }
+                //    out = (ch == 0) ? lpfLeft.processSample(out, cutoffClamped)
+                //                    : lpfRight.processSample(out, cutoffClamped);
+                //}
 
                 buffer.setSample(ch, i, out);
             
@@ -602,30 +639,18 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             cutofff = cutoffClamped;
             playhead_ += ratios_[i];
         }
-        logger.pushFromAudioThread(buffer, ratios_, ratios_before);
+
+        
     }
-    else {
-        DBG("THIS CASE SHOULD NOT EVER EXECUTE AND SHOULD BE DELETED SOON");
-        for (int i = 0; i < outN; i++) {
-            wrapPlayhead(playhead_, srcN);
-            auto index0 = (unsigned long)playhead_;
-            for (int ch = 0; ch < outCh; ch++) {
-                float value = *data->buffer.getReadPointer(0, index0);
-                buffer.setSample(ch, i, value);
-            }
-            playhead_ += 1;
-        }
-    }
+    juce::dsp::AudioBlock<float> block(buffer);
+    juce::dsp::ProcessContextReplacing<float> leftContext(block.getSingleChannelBlock(0));
+    juce::dsp::ProcessContextReplacing<float> rightContext(block.getSingleChannelBlock(1));
 
-    //logger.pushFromAudioThread(buffer, ratios_);
-
-    //append_vector_csv("test_csv.csv", ratios_, 16);
-
-    //logger.pushFromAudioThread(buffer, ratios_);
+    hpLeft.process(leftContext);
+    hpRight.process(rightContext);
+    logger.pushFromAudioThread(buffer, ratios_, ratios_before, touchDown_ ? touch_vec : no_touch_vec);
     
-    // preparing the message vectors for the next buffer and update, so when it comes everything is in the desired range
-    // relative 0 at the middle buffer start
-    
+
     std::transform(afterRenderOffsetVec.begin(), afterRenderOffsetVec.end(), afterRenderOffsetVec.begin(),
         [outN](float val) { return val - outN; });
     
@@ -639,19 +664,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     preRenderOffsetVec = thisOffsetVec;
     thisValueVec = afterRenderValueVec;
     thisOffsetVec = afterRenderOffsetVec;
-
-
-    //if (hasPitchWheelMessage(midiMessages)) {
-    //    lastMidi_.swapWith(midiMessages);
-    //}
-    //else {
-    //    lastMidi_.clear();
-    //}
-
-
-
-
-
+    if (!ratios_.empty()) {
+        if (ratios_[ratios_.size()-1] > 1.0) {
+            apvts.getRawParameterValue("motor_on")->store(false);
+        }
+    }
 
 
 }

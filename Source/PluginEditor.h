@@ -42,6 +42,8 @@ private:
     juce::Slider filterBaseCutoffSlider;
     juce::Slider filterAlphaSlider;
     juce::Slider scratchScaleSlider;
+    juce::ComboBox vinylRpmBox;
+    juce::ComboBox motorRpmBox;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<ButtonAttachment> motorAttachment;
     std::unique_ptr<ButtonAttachment> filterAttachment;

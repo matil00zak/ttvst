@@ -70,13 +70,13 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
         motorButton
     );
 
-    addAndMakeVisible(tempoModeButton);
-    tempoModeButton.setButtonText("Tempo Mode");
-    tempoModeAttachment = std::make_unique<ButtonAttachment>(
-        audioProcessor.getAPVTS(),
-        "TempoMode",
-        tempoModeButton
-    );
+    //addAndMakeVisible(tempoModeButton);
+    //tempoModeButton.setButtonText("Tempo Mode");
+    //tempoModeAttachment = std::make_unique<ButtonAttachment>(
+    //    audioProcessor.getAPVTS(),
+    //    "TempoMode",
+    //    tempoModeButton
+    //);
 
     addAndMakeVisible(filterButton);
     filterButton.setButtonText("Filter");
@@ -140,6 +140,16 @@ PluginTestowy2AudioProcessorEditor::PluginTestowy2AudioProcessorEditor (PluginTe
         "ScratchScale",
         scratchScaleSlider
     );
+    vinylRpmBox.addItem("33 1/3", 1);
+    vinylRpmBox.addItem("45", 2);
+    addAndMakeVisible(vinylRpmBox);
+
+    motorRpmBox.addItem("33 1/3", 1);
+    motorRpmBox.addItem("45", 2);
+    addAndMakeVisible(motorRpmBox);
+
+
+
 
     // MIDI monitor setup
     //midiMonitor.setMultiLine(true);
@@ -283,27 +293,77 @@ void PluginTestowy2AudioProcessorEditor::resized() {
     {
         auto inner = contentB.reduced(8);
 
-        const int n = 3;
-        const int buttonH = juce::jmin(28, inner.getHeight());
-        const int y = inner.getY() + (inner.getHeight() - buttonH) / 2;
+        const int n = 2;
 
-        // space-evenly: equal space left, between, right
-        int gap = 8;
-        int buttonW = (inner.getWidth() - gap * (n + 1)) / n;
+        // podzia³ na 2 rzêdy (góra = buttony, dó³ = RPM)
+        auto topRow = inner.removeFromTop(inner.getHeight() * 0.5f);
+        auto bottomRow = inner;
 
-        // safety if the area gets small
-        if (buttonW < 40)
+        // ===== TOP ROW (BUTTONY) =====
         {
-            gap = 4;
-            buttonW = juce::jmax(40, (inner.getWidth() - gap * (n + 1)) / n);
+            const int buttonH = juce::jmin(28, topRow.getHeight());
+            const int y = topRow.getY() + (topRow.getHeight() - buttonH) / 2;
+
+            int gap = 8;
+            int buttonW = (topRow.getWidth() - gap * (n + 1)) / n;
+
+            if (buttonW < 40)
+            {
+                gap = 4;
+                buttonW = juce::jmax(40, (topRow.getWidth() - gap * (n + 1)) / n);
+            }
+
+            int x = topRow.getX() + gap;
+
+            loadButton.setBounds(x, y, buttonW, buttonH); x += buttonW + gap;
+            motorButton.setBounds(x, y, buttonW, buttonH);
         }
 
-        int x = inner.getX() + gap;
+        // ===== BOTTOM ROW (RPM) =====
+        {
+            const int boxH = juce::jmin(28, bottomRow.getHeight());
+            const int y = bottomRow.getY() + (bottomRow.getHeight() - boxH) / 2;
 
-        loadButton.setBounds(x, y, buttonW, buttonH); x += buttonW + gap;
-        motorButton.setBounds(x, y, buttonW, buttonH); x += buttonW + gap;
-        tempoModeButton.setBounds(x, y, buttonW, buttonH);
+            int gap = 8;
+            int boxW = (bottomRow.getWidth() - gap * (n + 1)) / n;
+
+            if (boxW < 40)
+            {
+                gap = 4;
+                boxW = juce::jmax(40, (bottomRow.getWidth() - gap * (n + 1)) / n);
+            }
+
+            int x = bottomRow.getX() + gap;
+
+            vinylRpmBox.setBounds(x, y, boxW, boxH); x += boxW + gap;
+            motorRpmBox.setBounds(x, y, boxW, boxH);
+        }
     }
+
+    //{
+    //    auto inner = contentB.reduced(8);
+
+    //    const int n = 3;
+    //    const int buttonH = juce::jmin(28, inner.getHeight());
+    //    const int y = inner.getY() + (inner.getHeight() - buttonH) / 2;
+
+    //    // space-evenly: equal space left, between, right
+    //    int gap = 8;
+    //    int buttonW = (inner.getWidth() - gap * (n + 1)) / n;
+
+    //    // safety if the area gets small
+    //    if (buttonW < 40)
+    //    {
+    //        gap = 4;
+    //        buttonW = juce::jmax(40, (inner.getWidth() - gap * (n + 1)) / n);
+    //    }
+
+    //    int x = inner.getX() + gap;
+
+    //    loadButton.setBounds(x, y, buttonW, buttonH); x += buttonW + gap;
+    //    motorButton.setBounds(x, y, buttonW, buttonH); x += buttonW + gap;
+    //    tempoModeButton.setBounds(x, y, buttonW, buttonH);
+    //}
 
 }
 

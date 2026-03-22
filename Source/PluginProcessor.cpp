@@ -215,11 +215,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.01), 1.0f)
     );
 
-    params.push_back(std::make_unique<juce::AudioParameterBool>(
-        "TempoMode",
-        "Tempo Mode",
-        false
-    ));
+    //params.push_back(std::make_unique<juce::AudioParameterBool>(
+    //    "TempoMode",
+    //    "Tempo Mode",
+    //    false
+    //));
     
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "ScratchScale",
@@ -343,7 +343,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     //juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
     //    .getChildFile("test_saw_48_410_4096_4095_04_f0_s_1_acc.wav");
     juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
-        .getChildFile("test_saw_48_410_her_f0_s_1_acc.wav");
+        .getChildFile("test_gestures_motor_on_3.wav");
 
     DBG("logger file: " + out.getFullPathName());
 
@@ -440,7 +440,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     for (const auto metadata : midiMessages)
         midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition, bufferID);
 
-    bufferID++;
+    
 
 
     //CLEAR STUFF BEFORE PROCESSING
@@ -483,9 +483,9 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const float tauFree = apvts.getRawParameterValue("TauFree")->load();
     baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
     filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
-    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load() * fileSR * sampleRateRatio * 9.0 / 5.0;
-    const double motorSpeed = motorOn ? (sampleRateRatio+(sampleRateRatio * pitchShift / 100.0))*1.1 : 0.0;
-    const bool tempoMode = apvts.getRawParameterValue("TempoMode")->load();
+    const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load() * fileSR * sampleRateRatio;
+    const double motorSpeed = motorOn ? (sampleRateRatio+(sampleRateRatio * pitchShift / 100.0)) : 0.0;
+    //const bool tempoMode = apvts.getRawParameterValue("TempoMode")->load();
 
 
     //DETERMINE TOUCH STATE
@@ -494,14 +494,14 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         const auto& m = meta.getMessage();
         if (m.isController() && m.getControllerNumber() == 64) {
             touchDown_ = (m.getControllerValue() >= 64);
-            if (tempoMode) {
-                if (touchDown_) {
-                    playheadOnTouchdown_ = playhead_;
-                }
-                if (!touchDown_) {
-                    playhead_ = playheadOnTouchdown_;
-                }
-            }
+            //if (tempoMode) {
+            //    if (touchDown_) {
+            //        playheadOnTouchdown_ = playhead_;
+            //    }
+            //    if (!touchDown_) {
+            //        playhead_ = playheadOnTouchdown_;
+            //    }
+            //}
         }
     }
 
@@ -582,7 +582,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         }
         if (pitchEmptyStreak_ == 2) {
             speeds_.push_back(lastGoodSpeed_);
-            speed_offsets_.push_back(2*outN - 1);
+            speed_offsets_.push_back(2 * outN - 1);
             lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
         }
         if (pitchEmptyStreak_ > 2) {
@@ -593,7 +593,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
     else if (!touchDown_) {
         alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
-        //appendNewPitchWheelSpeeds(speeds_, speed_offsets_, values_, offsets_, outN, scratchScale);
         speeds_.push_back(motorSpeed);
         speed_offsets_.push_back(2 * outN - 1);
         lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
@@ -605,7 +604,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
 
     if (ratios_.size() == outN) {
-
+        bufferID++;
         if (!ratios_.empty() && std::isfinite(ratios_.back())) {
             lastGoodSpeed_ = ratios_.back();
         }
@@ -624,8 +623,8 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
             for (int ch = 0; ch < outCh; ch++){
                 
-                float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
-                //float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 4096, 4095);
+                //float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
+                float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 4096, 4095);
                 //float out = interpolateLinear(data->buffer, ch, playhead_, srcN);
                 //if (filterOn){
 
@@ -664,13 +663,21 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     preRenderOffsetVec = thisOffsetVec;
     thisValueVec = afterRenderValueVec;
     thisOffsetVec = afterRenderOffsetVec;
-    if (!ratios_.empty()) {
-        if (ratios_[ratios_.size()-1] > 1.0) {
-            apvts.getRawParameterValue("motor_on")->store(false);
-        }
-    }
+
+    //DBG(bufferID);
+    //if (bufferID == 50) {
+    //    apvts.getParameter("PitchShift")->setValueNotifyingHost(-8.0f);
+    //}
+    //if (bufferID == 100) {
+    //    apvts.getParameter("TauFree")->setValueNotifyingHost(0.05f);
+    //    apvts.getParameter("motorOn")->setValueNotifyingHost(0.0f);
+    //}
+    //if (bufferID == 200) {
+    //    apvts.getParameter("motorOn")->setValueNotifyingHost(1.0f);
+    //}
 
 
+    
 }
 
 //==============================================================================

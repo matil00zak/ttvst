@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <JUCERPROJECT id="EnubJq" name="PluginTestowy2" projectType="audioplug" useAppConfig="0"
-              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" pluginCharacteristicsValue="pluginIsSynth,pluginWantsMidiIn">
+              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" pluginCharacteristicsValue="pluginIsSynth,pluginWantsMidiIn"
+              pluginName="Turntable VST - touch control">
   <MAINGROUP id="lgQ1Au" name="PluginTestowy2">
     <GROUP id="{99ED1F21-A7C9-0CD2-C1AA-5FDA53FCEF49}" name="Source">
       <GROUP id="{05B79315-1829-C362-7AA7-78929EE30333}" name="helpers">

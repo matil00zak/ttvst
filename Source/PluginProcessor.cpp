@@ -343,7 +343,7 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     //juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
     //    .getChildFile("test_saw_48_410_4096_4095_04_f0_s_1_acc.wav");
     juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
-        .getChildFile("test_gestures_motor_on_3.wav");
+        .getChildFile("predictibility_test.wav");
 
     DBG("logger file: " + out.getFullPathName());
 

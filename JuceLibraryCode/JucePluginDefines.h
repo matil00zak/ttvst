@@ -41,7 +41,7 @@
  #define JucePlugin_Enable_ARA             0
 #endif
 #ifndef  JucePlugin_Name
- #define JucePlugin_Name                   "PluginTestowy2"
+ #define JucePlugin_Name                   "Turntable VST - touch control"
 #endif
 #ifndef  JucePlugin_Desc
  #define JucePlugin_Desc                   "PluginTestowy2"
@@ -137,7 +137,7 @@
  #define JucePlugin_IAASubType             JucePlugin_PluginCode
 #endif
 #ifndef  JucePlugin_IAAName
- #define JucePlugin_IAAName                "yourcompany: PluginTestowy2"
+ #define JucePlugin_IAAName                "yourcompany: Turntable VST - touch control"
 #endif
 #ifndef  JucePlugin_VSTNumMidiInputs
  #define JucePlugin_VSTNumMidiInputs       16

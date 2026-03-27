@@ -1,3 +1,8 @@
+
+
+//nieuzywany w wersji docelowej logger WAV do debugowania
+// 5 CHANNEL WAV LOGGER, rozszerzony, nazwa 3channel nieaktualna
+/*
 #include <JuceHeader.h>
 #include <vector>
 #include <array>
@@ -23,13 +28,13 @@ public:
         stop();
     }
 
-    // Call from message thread / setup code (NOT audio thread)
+
     juce::Result start(const juce::File& fileToCreateOrOverwrite,
                        double sampleRate,
                        int bitsPerSample = 24,
                        std::array<int, 2> sourceStereoChannels = {0, 1})
     {
-        stop(); // stop any previous session
+        stop();
 
         if (sampleRate <= 0.0)
             return juce::Result::fail("Invalid sampleRate.");
@@ -37,7 +42,6 @@ public:
         outFile = fileToCreateOrOverwrite;
         channelMap = sourceStereoChannels;
 
-        // overwrite for a continuous stream; "append across runs" is a separate offline concern
         if (outFile.existsAsFile())
             outFile.deleteFile();
 
@@ -64,7 +68,7 @@ public:
         return juce::Result::ok();
     }
 
-    // Call from message thread / teardown code (NOT audio thread)
+    // Call from message thread
     void stop()
     {
         shouldRun.store(false, std::memory_order_release);
@@ -82,11 +86,7 @@ public:
 
     bool isRunning() const { return writer != nullptr && shouldRun.load(std::memory_order_acquire); }
 
-    // Call from AUDIO THREAD (processBlock). RT-safe:
-    // - no locks
-    // - no malloc
-    // - no file I/O
-    // Returns false if FIFO is full (data dropped).
+
     bool pushFromAudioThread(const juce::AudioBuffer<float>& stereoBuffer,
                              const std::vector<double>& thirdChannelVector,
                              const std::vector<double>& fourthChannelVector,
@@ -102,8 +102,6 @@ public:
         if (stereoBuffer.getNumChannels() <= juce::jmax(channelMap[0], channelMap[1]))
             return false;
 
-        // If callback block larger than our max, we split or drop.
-        // Here: split into chunks.
         int offset = 0;
         while (offset < numSamples)
         {
@@ -222,3 +220,4 @@ private:
     std::atomic<bool> shouldRun { false };
     std::atomic<int> writeIndex { 0 }, readIndex { 0 };
 };
+*/

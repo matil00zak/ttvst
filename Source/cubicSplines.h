@@ -7,7 +7,7 @@
 
   ==============================================================================
 */
-
+/*
 #pragma once
 #include <vector>
 #include <string>
@@ -61,3 +61,4 @@ namespace ttvst::splines {
     splineSetPlus splineSpecial(vec& x, vec& y, std::optional<splineCondition> spline_condition, int newCondIndex, const int outN);
 
 }
+*/

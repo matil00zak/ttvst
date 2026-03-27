@@ -4,7 +4,8 @@
     helpers.cpp
     Created: 1 Nov 2025 1:58:05am
     Author:  matjo
-
+    
+    wszelkie funkcje pomocnicze do operacji na komunikatach midi, indeksach danych, do manipulacji sygnalami we wtyczce
   ==============================================================================
 */
 
@@ -221,6 +222,8 @@ namespace ttvst::helps {
         return d;
     }
 
+
+    
     vectorPairDbl positionsToSpeedWrapped(std::vector<double> values,
         std::vector<double> offsets,
         int outN,
@@ -230,8 +233,6 @@ namespace ttvst::helps {
         std::vector<double> speed_offsets;
         int nextCount = 0;
 
-        // set this to your wrap size:
-        // - for MIDI pitch bend 14-bit: 16384 (values 0..16383)
         constexpr double WRAP = 16384.0;
 
         if (offsets.size() > 1 && values.size() > 1) {
@@ -290,13 +291,13 @@ namespace ttvst::helps {
         int outN)
     {
         if (speeds.size() != speed_offsets.size())
-            return; // or handle error; vectors must stay paired
+            return;
 
         const int n = static_cast<int>(speed_offsets.size());
         if (n == 0)
             return;
 
-        // Find the newest (last) negative offset that is still within [-outN, 0).
+        
         int keepNegIdx = -1;
         for (int i = n - 1; i >= 0; --i) {
             const double off = speed_offsets[i];
@@ -314,11 +315,11 @@ namespace ttvst::helps {
         for (int i = 0; i < n; ++i) {
             const double off = speed_offsets[i];
 
-            // Rule 1: drop anything older than the window
+         
             if (off < -outN)
                 continue;
 
-            // Rule 2: keep only one newest negative offset
+            
             if (off < 0.0 && i != keepNegIdx)
                 continue;
 
@@ -403,7 +404,7 @@ namespace ttvst::helps {
 
     void generateRatiosVectorLERP(std::vector<double>* ratios, std::vector<double>* speeds, std::vector<double>* offsets, int outN) {
 
-        // check if discrete vectors are ok for interpolation
+        // sprawdzenie poprawnosci wektorow punktow do interpolacji
         if (speeds->size() != offsets->size() || offsets->size() < 2 || speeds->size() < 2) {
             ratios = {};
             return;
@@ -412,21 +413,21 @@ namespace ttvst::helps {
         const int nPts = static_cast<int>(offsets->size());
 
        
-        //check for wrong not increasing offsets
+        // sprawdzenie zlej kolejnosci offsetow 
         for (int i = 0; i + 1 < nPts; ++i) {
             if ((*offsets)[i + 1] <= (*offsets)[i]) {
                 return;
             }
         }
 
-        // check for sufficient range
+        // sprawdzenie pokrycia zakresu biezacego bufora
         if ((*offsets).front() > 0.0 || (*offsets).back() < static_cast<double>(outN - 1)) {
             return;
         }
 
         std::vector<double> lerp_ratios(outN, 0.0);
 
-        // interpolate segments
+        // interpolacja pomiedzy punktami
         for (int i = 0; i + 1 < nPts; i++) {
             const double x0 = (*offsets)[i];
             const double x1 = (*offsets)[i + 1];
@@ -439,7 +440,7 @@ namespace ttvst::helps {
             int startIdx = static_cast<int>(std::ceil(x0));
             int endIdx = static_cast<int>(std::floor(x1));
 
-            //check if segment is in range
+            
             if (endIdx < 0 || startIdx > outN - 1) {
                 continue; 
             }
@@ -456,6 +457,8 @@ namespace ttvst::helps {
         *ratios = std::move(lerp_ratios);
     }
 
+    
+    // wstawianie punktu pomocniczego w domykajacego biezacy bufor, zapewnienie ciaglosci w kolejnych iteracjach processBlock()
     void lerpContinuityRestore(std::vector<double>* speeds, std::vector<double>* offsets, int outN) {
         if (!speeds || !offsets || outN <= 0) {
             return;
@@ -465,8 +468,6 @@ namespace ttvst::helps {
             return;
         }
 
-        // NOTE: This assumes offsets are sorted ascending.
-        // If they may not be sorted, remove this check or sort first.
         if (offsets->front() > 0.0 || offsets->back() < static_cast<double>(outN - 1)) {
             return;
         }
@@ -482,12 +483,10 @@ namespace ttvst::helps {
             const double x = (*offsets)[i];
             const double y = (*speeds)[i];
 
-            // If any point is already inside [0, outN-1], do nothing
             if (x >= 0.0 && x < static_cast<double>(outN)) {
                 return;
             }
 
-            // Keep updating "pre" so we end up with the last point before 0
             if (x < 0.0) {
                 pre_x = x;
                 pre_y = y;
@@ -495,7 +494,6 @@ namespace ttvst::helps {
                 continue;
             }
 
-            // First point at or after outN is our "after"
             if (x >= static_cast<double>(outN)) {
                 after_x = x;
                 after_y = y;
@@ -510,8 +508,8 @@ namespace ttvst::helps {
         }
 
         const double xTarget = static_cast<double>(outN - 1);
-
-        // Safety: avoid division by zero
+        
+        // nie dzielimy przez zero offsety nie powinny byc takie same
         const double dx = after_x - pre_x;
         if (dx == 0.0) {
             return;
@@ -534,8 +532,6 @@ namespace ttvst::helps {
             return;
         }
 
-        // NOTE: This assumes offsets are sorted ascending.
-        // If they may not be sorted, remove this check or sort first.
         if (offsets->front() > 0.0 || offsets->back() >= outN - 1) {
             return;
         }
@@ -547,7 +543,6 @@ namespace ttvst::helps {
              
         const double xTarget = static_cast<double>(outN - 1);
 
-        // Safety: avoid division by zero
         const double dx = x_1 - x_0;
         if (dx == 0.0) {
             return;

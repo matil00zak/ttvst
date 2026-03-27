@@ -13,10 +13,10 @@
 #include <atomic>
 #include <vector>
 #include "LoadedAudio.h"
-#include "MidiMessageManager.h"
+//#include "MidiMessageManager.h"
 #include "helpers.h"
-#include "cubicSplines.h"
-#include "CascadedOnePoleLPF.h"
+//#include "cubicSplines.h"
+//#include "CascadedOnePoleLPF.h"
 
 //==============================================================================
 
@@ -27,18 +27,16 @@ class PluginTestowy2AudioProcessor  : public juce::AudioProcessor
 {
 public:
     //==============================================================================
-    std::vector<double> linearContinuationFromLastSlope(const std::vector<double>& in,
-        std::size_t numOut);
+
     PluginTestowy2AudioProcessor();
     ~PluginTestowy2AudioProcessor() override;
-    double PluginTestowy2AudioProcessor::alphaStageFromImpulseDecayMs(float T_s, double fs);
     double PluginTestowy2AudioProcessor::alphaFromStepResponseTimeEMA(float T_s, double fs);
     void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha);
     void PluginTestowy2AudioProcessor::smoothRatiosTwoStage(std::vector<double>& ratios, double alpha);
 
     double getPlayheadSeconds() const;
     int getFileSR() const;
-    ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
+    //ttvst::MidiMessageManager& getMidiLog() noexcept { return midiLog_; }
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
 
     std::shared_ptr<const LoadedAudio> getLoaded() const noexcept;
@@ -89,28 +87,24 @@ private:
     int zerroes = 0;
     juce::dsp::IIR::Filter<float> hpLeft;
     juce::dsp::IIR::Filter<float> hpRight;
-    //juce::dsp::IIR::Coefficients< float >::Ptr Coeffs;
     juce::AudioProcessorValueTreeState apvts;
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     std::shared_ptr<const LoadedAudio> loaded_;                                     // loaded audio ptr
-    ttvst::MidiMessageManager midiLog_;                                             // logs container
+    //ttvst::MidiMessageManager midiLog_;                                           // logs container
     std::vector<double> offsets_, values_;                                          // contains all avilable msgs data, just storage, dbg
-    std::vector<double> speeds_, speed_offsets_, ratios_, ratios_before, touch_vec, no_touch_vec;
-    // crucial very important data, base for generation
+    std::vector<double> speeds_, speed_offsets_, ratios_, touch_vec, no_touch_vec;
+    std::vector<double> ratios_before;
+
     double lastSpeed, lastOffset;                                                   // data for the empty buffers // patches MIDI stream interruption
     int emptyBuffersCount;
     double hostSampleRate_;
     double playhead_ = 0.0;                                                         // the playhead position
     std::vector<double> thisValueVec, afterRenderValueVec, preRenderValueVec;       // message data stream containers
     std::vector<double> thisOffsetVec, afterRenderOffsetVec, preRenderOffsetVec;    // message data stream containers
-    std::vector<ttvst::splines::splineSet> splineSet_;  // deleted: lastSplines     // set of splines (generated every iteration)
-    std::optional<ttvst::splines::splineCondition> splineCondition_;                // condition passed between spline set generation
-    ttvst::splines::splineSet lastSpline;                                           // last spline container - completes the spline set
     double ratioLPState = 0.0; 
-    double ratioLPStateStage1_ = 0.0;// speed inertia base // speed inertia container
+    double ratioLPStateStage1_ = 0.0;
     double tau, alpha;
-    //std::atomic<int> debugEvent{ 0 };
-    // inertia parameters
+
     double sampleRateRatio = 1.0;
     juce::AudioBuffer<float> lastBlock_;                                            // should be used to detect buffer size change. to do.
     juce::MidiBuffer lastMidi_;                                                     // midi messages contariner. in use
@@ -119,9 +113,7 @@ private:
     int maxEventsPerBlock;
 
     //filters
-    CascadedOnePoleLPF lpfLeft;
-    CascadedOnePoleLPF lpfRight;
-    float baseCutoff = 10000.0f;
+
     float filterAlpha = 0.5f;
     double tauFreeMotor = 0.5;
     bool  touchDown_ = false;       // CC64 >=64

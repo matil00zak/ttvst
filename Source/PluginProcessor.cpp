@@ -15,70 +15,24 @@
 #include <wtypes.h>
 #include <cmath>
 #include "helpers.h"
-#include "cubicSplines.h"
 #include "LutSincInterpolation.h"
-#include "WavLogger.cpp"
+//#include "WavLogger.cpp"
 
 
 
 //==============================================================================
-//using LoadedPair = std::pair<std::shared_ptr<LoadedAudio>, std::shared_ptr<LoadedAudio>>;
+//nieuzywana struktura pomocnicza
 struct Seg { int offset = 0; int value  = 0; };
 
 
-
-std::vector<double> PluginTestowy2AudioProcessor::linearContinuationFromLastSlope(const std::vector<double>& in,
-    std::size_t numOut)
-{
-    std::vector<double> out;
-    out.reserve(numOut);
-
-    if (numOut == 0) return out;
-
-    // Not enough data to estimate a slope -> default slope = 0 (flat continuation).
-    if (in.empty()) {
-        out.assign(numOut, 0.0);
-        return out;
-    }
-    if (in.size() == 1) {
-        out.assign(numOut, in.back()); // constant continuation (no slope info)
-        return out;
-    }
-
-    const double y0 = in[in.size() - 2];
-    const double y1 = in[in.size() - 1];
-    const double slope = y1 - y0; // assumes unit x-step between samples
-    //DBG(slope);
-
-    // Start from y1 + slope (true continuation; do not repeat y1)
-    double y = y1;
-    for (std::size_t i = 0; i < numOut; ++i) {
-        y += slope;
-        out.push_back(y);
-    }
-
-    return out;
-}
-
-double PluginTestowy2AudioProcessor::alphaStageFromImpulseDecayMs(float T_s, double fs)
-{
-    const double eps = 0.5; // %
-    int K = (int)std::lround(T_s * fs);
-    if (K < 1) K = 1;
-
-    const double b = std::exp(std::log(eps / (K + 1.0)) / K); // b = 1 - alpha
-    const double alpha = 1.0 - b;
-    return juce::jlimit(0.0, 1.0, alpha);
-}
-
+// obliczanie wspolczynnika wygladzania ze stalej czasowej tau
 double PluginTestowy2AudioProcessor::alphaFromStepResponseTimeEMA(float tau_s, double fs) {
 
     alpha = 1 - std::exp((-1 / fs) / tau_s);
-
     return juce::jlimit(0.0, 1.0, alpha);
 }
 
-
+// wygladzanie wektora r
 void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, double alpha)
 {
     for (auto& r : ratios)
@@ -88,27 +42,20 @@ void PluginTestowy2AudioProcessor::smoothRatios(std::vector<double>& ratios, dou
     }
 }
 
+// kaskada dwoch filtrow dla ratios, nieuzywane
 void PluginTestowy2AudioProcessor::smoothRatiosTwoStage(std::vector<double>& ratios, double alpha)
 {
-    // alpha w [0,1]
     if (alpha < 0.0) alpha = 0.0;
     if (alpha > 1.0) alpha = 1.0;
-
-
-    //const double a = 1.0 - std::sqrt(1.0 - alpha);
-
     for (auto& r : ratios)
     {
-        // Stopieñ 1
         ratioLPStateStage1_ += alpha * (r - ratioLPStateStage1_);
-
         ratioLPState += alpha * (ratioLPStateStage1_ - ratioLPState);
-
         r = ratioLPState;
     }
 }
 
-
+// wczytanie pliku zrodlowego do buffera
 static std::shared_ptr<LoadedAudio>
 loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 {
@@ -134,7 +81,7 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
         const int toRead = (int)std::min<juce::int64>(block, numSamples64 - filePos);
 
         if (!reader->read(&out->buffer,
-            (int)filePos,            // destStartSample
+            (int)filePos,             // destStartSample
             toRead,                   // numSamples
             filePos,                  // start w pliku
             true, true))              // (left/right for stereo)
@@ -145,8 +92,9 @@ loadFileIntoAudioBuffer(juce::AudioFormatManager& fm, const juce::File& file)
 
     return out;
 }
+
+// odczyt wskaznika dla wczytanego pliku zrodlowego
 LoadedAudioPtr PluginTestowy2AudioProcessor::getLoaded() const noexcept{
-    // atomowy odczyt wskaznika (acquire para dla release w loaderze)
     return std::atomic_load_explicit(&loaded_, std::memory_order_acquire);
 }
 
@@ -203,11 +151,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
         false
     ));
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        "FilterBaseCutoff",
-        "Base Cutoff",
-        juce::NormalisableRange<float>(100.0f, 20000.0f, 100.0f), 16000.0f)
-    );
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "FilterAlpha",
@@ -215,11 +158,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout PluginTestowy2AudioProcessor
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.01), 1.0f)
     );
 
-    //params.push_back(std::make_unique<juce::AudioParameterBool>(
-    //    "TempoMode",
-    //    "Tempo Mode",
-    //    false
-    //));
     
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         "ScratchScale",
@@ -292,8 +230,8 @@ const juce::String PluginTestowy2AudioProcessor::getProgramName (int index)
 void PluginTestowy2AudioProcessor::changeProgramName (int index, const juce::String& newName)
 {
 }
-
-ThreeChannelWavLogger logger;
+//obiekt loggera danych sterujacych
+//ThreeChannelWavLogger logger;
 //==============================================================================
 void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
@@ -325,12 +263,12 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     setLatencySamples(samplesPerBlock);
     tau = 0.07;
     alpha = 1.0 - std::exp(-1.0 / (sampleRate * tau));
-    splineCondition_.reset();
+    //splineCondition_.reset();
     touch_vec = std::vector<double>(samplesPerBlock, 1.0);
     no_touch_vec = std::vector<double>(samplesPerBlock, 0.0);
-    lpfLeft.prepare(sampleRate);
-    lpfRight.prepare(sampleRate);
-    baseCutoff = 12000.0f;
+    //lpfLeft.prepare(sampleRate);
+    //lpfRight.prepare(sampleRate);
+    //baseCutoff = 12000.0f;
     filterAlpha = 1.0;
     ratioLPStateStage1_ = 0.0;
     ratioLPState = 0.0;
@@ -340,16 +278,16 @@ void PluginTestowy2AudioProcessor::prepareToPlay (double sampleRate, int samples
     //lut = ttvst::lutSinc::generateLutSinc(512,27, 0.5);
     lut = ttvst::lutSinc::generateLutSinc(4096, 4095, 0.40);
 
+
+    // Przygotowanie mechanizmu zapisu danych testowych
     //juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
     //    .getChildFile("test_saw_48_410_4096_4095_04_f0_s_1_acc.wav");
-    juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
-        .getChildFile("predictibility_test.wav");
-
-    DBG("logger file: " + out.getFullPathName());
-
-    auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
-    if (r.failed())
-        DBG("logger start failed: " + r.getErrorMessage());
+    //juce::File out = juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
+    //    .getChildFile("predictibility_test.wav");
+    //DBG("logger file: " + out.getFullPathName());
+    //auto r = logger.start(out, sampleRate, 24, { 0, 1 }); // map buffer ch0->file0, ch1->file1
+    //if (r.failed())
+    //    DBG("logger start failed: " + r.getErrorMessage());
 }
 
 void PluginTestowy2AudioProcessor::releaseResources()
@@ -391,7 +329,7 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
     std::thread([this, file]
         {
             juce::AudioFormatManager fm;
-            fm.registerBasicFormats(); // WAV/AIFF/FLAC/MP3* (MP3 depends on defines)
+            fm.registerBasicFormats(); // WAV/AIFF/FLAC/MP3
 
             auto data = loadFileIntoAudioBuffer(fm, file); // std::shared_ptr<LoadedAudio>
             if (data)
@@ -401,15 +339,12 @@ void PluginTestowy2AudioProcessor::beginLoadFile(const juce::File& file)
                 //    << "  ch=" << data->buffer.getNumChannels()
                 //    << "  samples=" << data->buffer.getNumSamples());
 
-                // Publish as const to match the field type `std::shared_ptr<const LoadedAudio>`
-                // NOTE: atomic_store/atomic_load overloads for shared_ptr are declared in <memory>.
-                
                 std::shared_ptr<const LoadedAudio> published = std::move(data);
                 fileSR = published ->sampleRate;
                 sampleRateRatio = fileSR / hostSampleRate_;
                 std::atomic_store_explicit(&loaded_, published, std::memory_order_release);
 
-                //DBG("LOADEDD");
+                //DBG("LOADED");
             }
             else
             {
@@ -428,30 +363,19 @@ int PluginTestowy2AudioProcessor::getFileSR() const {
 void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     using namespace ttvst::helps;
-    using namespace ttvst::splines;
     using namespace ttvst::lutSinc;
     juce::ScopedNoDenormals _;
 
     const int totalNumInputChannels = getTotalNumInputChannels();
     const int totalNumOutputChannels = getTotalNumOutputChannels();
     
-    // CAPTURE MIDI FOR THE UI
-
-    for (const auto metadata : midiMessages)
-        midiLog_.pushFromAudioThread(metadata.getMessage(), metadata.samplePosition, bufferID);
-
-    
 
 
     //CLEAR STUFF BEFORE PROCESSING
-
     buffer.clear();
     offsets_ = {};
     values_ = {};
     ratios_ = {};
-    ratios_before = {};
-    //speeds_ = {};
-    //speed_offsets_ = {};
 
 
     //LOAD BASIC PARAMETERS
@@ -466,49 +390,31 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     if (srcN <= 0) return;
 
 
-    //IF HOST RESIZES BUFFER THEN DROP LAST BLOCK AND UPDATE LAST BLOCK SIZE
     if (lastBlock_.getNumChannels() != outCh || lastBlock_.getNumSamples() != outN) {
-        lastBlock_.setSize(outCh, outN, false, true, true); // potential aloocation 
-        //DBG("block resized");
+        lastBlock_.setSize(outCh, outN, false, true, true);
         haveLastMidi_ = false;
     }
 
 
-    //CAPTURE UI PARAMETERS
-
+    // aktualizacja parametrow GUI
     const bool motorOn = apvts.getRawParameterValue("motorOn")->load();
     const bool filterOn = apvts.getRawParameterValue("FilterOn")->load();
     const float pitchShift = apvts.getRawParameterValue("PitchShift")->load();
     const float tauTouch = apvts.getRawParameterValue("TauTouch")->load();
     const float tauFree = apvts.getRawParameterValue("TauFree")->load();
-    baseCutoff = apvts.getRawParameterValue("FilterBaseCutoff")->load();
-    filterAlpha = apvts.getRawParameterValue("FilterAlpha")->load();
     const float scratchScale = apvts.getRawParameterValue("ScratchScale")->load() * fileSR * sampleRateRatio;
     const double motorSpeed = motorOn ? (sampleRateRatio+(sampleRateRatio * pitchShift / 100.0)) : 0.0;
-    //const bool tempoMode = apvts.getRawParameterValue("TempoMode")->load();
 
 
-    //DETERMINE TOUCH STATE
+    //aktualizacja stanu dotyku
     for (const auto meta : midiMessages)
     {
         const auto& m = meta.getMessage();
         if (m.isController() && m.getControllerNumber() == 64) {
             touchDown_ = (m.getControllerValue() >= 64);
-            //if (tempoMode) {
-            //    if (touchDown_) {
-            //        playheadOnTouchdown_ = playhead_;
-            //    }
-            //    if (!touchDown_) {
-            //        playhead_ = playheadOnTouchdown_;
-            //    }
-            //}
         }
     }
 
-
-    if (touchDown_) {
-        playheadOnTouchdown_ += outN * motorSpeed;
-    }
 
     int pitchMsgsCount = appendPitchWheelMetadata(midiMessages,
         outN,
@@ -516,10 +422,11 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         afterRenderOffsetVec);
     DBG(pitchMsgsCount);
     
-    repairPitchWheelMetadata(outN, afterRenderValueVec, afterRenderOffsetVec, force_one_msg);
+    //
+    //repairPitchWheelMetadata(outN, afterRenderValueVec, afterRenderOffsetVec, force_one_msg);
     
     
-
+    // licznik kolejnych buforow bez wiadomosci Pitch Bend
     if (pitchMsgsCount == 0) {
         if (pitchEmptyStreak_ < 5) {
             pitchEmptyStreak_++;
@@ -530,47 +437,15 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
         pitchEmptyStreak_ = 0;
     }
 
-
-    // creating vectors for messages in index range: < - outN, outN > -- moving in out memory buffers
+    // laczenie zakresu trzech buforow na potrzeby prostszego przetwarzania 
     offsets_.insert(offsets_.end(), preRenderOffsetVec.begin(), preRenderOffsetVec.end());
     offsets_.insert(offsets_.end(), thisOffsetVec.begin(), thisOffsetVec.end());
     offsets_.insert(offsets_.end(), afterRenderOffsetVec.begin(), afterRenderOffsetVec.end());
-    
-    //if (check_offsets) {
-    //    if (afterRenderOffsetVec.size() > 0) {
-    //        for (auto o : afterRenderOffsetVec) {
-    //            if (o == 0) {
-    //                zerroes--;
-    //            }
-    //            else {
-    //                zerroes++;
-    //            }
-    //        }
-    //        if (zerroes < -10) {
-    //            force_one_msg = true;
-    //            afterRenderOffsetVec.clear();
-    //            afterRenderValueVec.clear();
-    //            check_offsets = false;
-    //            //DBG("checked");
-
-    //        }
-    //        if (zerroes > 10) {
-    //            force_one_msg = false;
-    //            afterRenderOffsetVec.clear();
-    //            afterRenderValueVec.clear();
-    //            check_offsets = false;
-    //            //DBG("checked");
-    //        }
-    //        //DBG("eyo");
-    //        return;
-    //    }
-    //}
-
     values_.insert(values_.end(), preRenderValueVec.begin(), preRenderValueVec.end());
     values_.insert(values_.end(), thisValueVec.begin(), thisValueVec.end());
     values_.insert(values_.end(), afterRenderValueVec.begin(), afterRenderValueVec.end());
 
-
+    // strategia dzialania w przypadku kolejnych pustych buforow (Pitch Bend)
     if (touchDown_) {
         alpha = alphaFromStepResponseTimeEMA(tauTouch, hostSampleRate_);
         if (pitchEmptyStreak_ == 0) {
@@ -591,6 +466,7 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
             lerpContinuityRestore(&speeds_, &speed_offsets_, outN);
         }
     }
+    // brak dotyku
     else if (!touchDown_) {
         alpha = alphaFromStepResponseTimeEMA(tauFree, hostSampleRate_);
         speeds_.push_back(motorSpeed);
@@ -599,16 +475,17 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     }
 
     deleteOldPitchWheelSpeeds(speeds_, speed_offsets_, outN);
-
+    
+    // interpolacja liniowa pomiedzy wartosciami predkosci
     generateRatiosVectorLERP(&ratios_, &speeds_, &speed_offsets_, outN);
 
-
+    // interpolacja audio dla wygenerowanych predkosci / pozycji odtwarzania. generacja bufora wyjsciowego na podstawie wektora r (ratios_)
     if (ratios_.size() == outN) {
         bufferID++;
         if (!ratios_.empty() && std::isfinite(ratios_.back())) {
             lastGoodSpeed_ = ratios_.back();
         }
-        ratios_before = ratios_;
+        //ratios_before = ratios_;
         smoothRatios(ratios_, alpha);
         
         float cutofff;
@@ -617,37 +494,30 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
 
             wrapPlayhead(playhead_, srcN);
 
-            const float speedAbs = std::abs(ratios_[i]);
-            const float cutoff = baseCutoff * std::pow(speedAbs, filterAlpha);
-            const float cutoffClamped = juce::jlimit(50.0f, 0.45f * (float)hostSampleRate_, cutoff);
 
             for (int ch = 0; ch < outCh; ch++){
                 
                 //float out = interpolateHermiteCatmullRom(data->buffer, ch, playhead_, srcN);
                 float out = interpolateSincLUT_PhaseLerp(data->buffer, ch, playhead_, srcN, lutPtr, 4096, 4095);
                 //float out = interpolateLinear(data->buffer, ch, playhead_, srcN);
-                //if (filterOn){
-
-                //    out = (ch == 0) ? lpfLeft.processSample(out, cutoffClamped)
-                //                    : lpfRight.processSample(out, cutoffClamped);
-                //}
-
                 buffer.setSample(ch, i, out);
             
             }
-            cutofff = cutoffClamped;
             playhead_ += ratios_[i];
         }
 
         
     }
+
+    // filtracja sygnalu wyjsciowego
     juce::dsp::AudioBlock<float> block(buffer);
     juce::dsp::ProcessContextReplacing<float> leftContext(block.getSingleChannelBlock(0));
     juce::dsp::ProcessContextReplacing<float> rightContext(block.getSingleChannelBlock(1));
-
     hpLeft.process(leftContext);
     hpRight.process(rightContext);
-    logger.pushFromAudioThread(buffer, ratios_, ratios_before, touchDown_ ? touch_vec : no_touch_vec);
+
+    // dopisanie danych z bufora do wav. funkcjonalnosc przeznaczona do testow wtyczki
+    //logger.pushFromAudioThread(buffer, ratios_, ratios_before, touchDown_ ? touch_vec : no_touch_vec);
     
 
     std::transform(afterRenderOffsetVec.begin(), afterRenderOffsetVec.end(), afterRenderOffsetVec.begin(),
@@ -663,19 +533,6 @@ void PluginTestowy2AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     preRenderOffsetVec = thisOffsetVec;
     thisValueVec = afterRenderValueVec;
     thisOffsetVec = afterRenderOffsetVec;
-
-    //DBG(bufferID);
-    //if (bufferID == 50) {
-    //    apvts.getParameter("PitchShift")->setValueNotifyingHost(-8.0f);
-    //}
-    //if (bufferID == 100) {
-    //    apvts.getParameter("TauFree")->setValueNotifyingHost(0.05f);
-    //    apvts.getParameter("motorOn")->setValueNotifyingHost(0.0f);
-    //}
-    //if (bufferID == 200) {
-    //    apvts.getParameter("motorOn")->setValueNotifyingHost(1.0f);
-    //}
-
 
     
 }

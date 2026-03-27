@@ -7,6 +7,7 @@
 
   ==============================================================================
 */
+/*
 #pragma once
 #include "cubicSplines.h"
 #include<iostream>
@@ -287,3 +288,4 @@ namespace ttvst::splines {
 
 
 }
+*/

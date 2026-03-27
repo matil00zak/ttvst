@@ -39,7 +39,6 @@ private:
     juce::Slider tauTouchSlider;
     juce::Slider tauFreeSlider;
     juce::ToggleButton filterButton;
-    juce::Slider filterBaseCutoffSlider;
     juce::Slider filterAlphaSlider;
     juce::Slider scratchScaleSlider;
     juce::ComboBox vinylRpmBox;
@@ -59,9 +58,8 @@ private:
     juce::TextButton clearLogButton{ "Clear Logs" };
     juce::TextEditor midiMonitor;
     juce::Rectangle<int> waveformArea;
-    // Keep only a fixed number of recent lines to avoid UI slowdown
     juce::StringArray midiLines;
-    static constexpr int kMaxLines = 100; // tweak as you like
+    static constexpr int kMaxLines = 100;
     std::unique_ptr<juce::FileChooser> fileChooser;
     double visibleWindowSeconds = 0.5;
     juce::AudioFormatManager thumbnailFormatManager;

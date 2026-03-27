@@ -1,3 +1,4 @@
+/*
 #pragma once
 #include <JuceHeader.h>
 #include <atomic>
@@ -6,15 +7,15 @@
 
 namespace ttvst {
 
-    // Compact copyable event for the UI thread (no juce::MidiMessage on the RT path)
+
     struct MidiEvent
     {
-        int  sampleOffset = 0;      // offset within current audio block
-        int  type = 0;      // 0=Other, 1=NoteOn, 2=NoteOff, 3=CC, 4=Pitch
-        int  channel = 0;      // 1..16
-        int  data1 = 0;      // note/cc number
-        int  data2 = 0;      // velocity/cc value
-        int  pitchValue = 8192;   // 0..16383, 8192 is center
+        int  sampleOffset = 0; 
+        int  type = 0;
+        int  channel = 0;
+        int  data1 = 0;
+        int  data2 = 0;
+        int  pitchValue = 8192;
         int  bufferID = 666;
 
 
@@ -41,10 +42,7 @@ namespace ttvst {
         }
     };
 
-    /**
-     * Single-producer (audio thread), single-consumer (message thread) ring buffer.
-     * Lock-free, drops on overflow (better than blocking the audio thread).
-     */
+
     class MidiMessageManager
     {
     public:
@@ -71,7 +69,6 @@ namespace ttvst {
         }
 
 
-        // Called from processBlock (audio thread)
         void pushFromAudioThread(const juce::MidiMessage& m, int sampleOffset, int bufferID) noexcept
         {
             MidiEvent e;
@@ -90,19 +87,18 @@ namespace ttvst {
             else if (m.isPitchWheel())
             {
                 e.type = 4;
-                e.pitchValue = m.getPitchWheelValue(); // 0..16383, 8192 center
+                e.pitchValue = m.getPitchWheelValue();
             }
             else
             {
                 e.type = 0;
             }
 
-            // SPSC ring push
+
             auto w = write_.load(std::memory_order_relaxed);
             auto next = (w + 1) & mask;
             if (next == read_.load(std::memory_order_acquire))
             {
-                // Buffer full: drop (never block the audio thread)
                 dropped_.fetch_add(1, std::memory_order_relaxed);
                 return;
             }
@@ -110,7 +106,6 @@ namespace ttvst {
             write_.store(next, std::memory_order_release);
         }
 
-        // Called from UI thread (e.g., editor Timer)
         void drainTo(std::vector<MidiEvent>& out) noexcept
         {
             auto r = read_.load(std::memory_order_relaxed);
@@ -124,14 +119,13 @@ namespace ttvst {
             read_.store(r, std::memory_order_release);
         }
 
-        // Optional: how many events were dropped due to overflow (debug UI)
         size_t getAndResetDroppedCount() noexcept
         {
             return dropped_.exchange(0, std::memory_order_acq_rel);
         }
 
     private:
-        static constexpr size_t capacity = 2048;         // power-of-two
+        static constexpr size_t capacity = 2048;
         static constexpr size_t mask = capacity - 1;
 
         std::array<MidiEvent, capacity> buffer_{};
@@ -141,3 +135,5 @@ namespace ttvst {
     };
 
 } // namespace ttvst
+
+*/

@@ -4,7 +4,7 @@
     LutSincInterpolation.h
     Created: 18 Jan 2026 8:39:07am
     Author:  matjo
-
+    Wszelkie implementacjie interpolacji audio
   ==============================================================================
 */
 
@@ -24,19 +24,19 @@ namespace ttvst::lutSinc
 
     double sinc_pi(double x) noexcept
     {
-        // sinc_pi(x) = sin(pi*x)/(pi*x)
         if (std::abs(x) < 1e-12)
             return 1.0;
         const double pix = juce::MathConstants<double>::pi * x;
         return std::sin(pix) / pix;
     }
 
-    // Classic Blackman coefficients: a0=0.42, a1=0.5, a2=0.08
+
     double blackman_window(double n, double M) noexcept
     {
         if (M <= 0.0)
             return 1.0;
 
+        // klasyczne wspolczynniki
         const double a0 = 0.42;
         const double a1 = 0.50;
         const double a2 = 0.08;
@@ -47,49 +47,36 @@ namespace ttvst::lutSinc
         return a0 - a1 * w1 + a2 * w2;
     }
 
+    // generacja tablicy wspolczynnikow w postaci wektora o dlugisci P*N-1 wspolczynnikow
+    // P: liczba dyskretnych faz
+    // N: liczba wspolczynnikow w zestawie fazy
+    // fc: znormalizowana czestotliwosc
+    // indeksowane: h(alphaIdx, kIdx) = wektorLUT[p*k]
 
-    // P: number of phases (e.g. 512..4096)
-    // N: taps per phase (odd), e.g. 9, 15, 17, 31
-    // fc: normalized cutoff in cycles/sample, (0, 0.5]. Use ~0.45 for SRC safety.
-    //
-    // Returns flat vector of size P*N (phase-major).
     std::vector<float> generateLutSinc(int P, int N, double fc)
     {
-        if (P <= 0)
-            throw std::invalid_argument("generateLutSinc: P must be > 0");
-        if (N <= 1 || (N % 2) == 0)
-            throw std::invalid_argument("generateLutSinc: N must be an odd integer > 1");
-        if (!(fc > 0.0 && fc <= 0.5))
-            throw std::invalid_argument("generateLutSinc: fc must be in (0, 0.5]");
-
-        const int K = (N - 1) / 2;
-        (void)K;
 
         std::vector<float> lut(static_cast<std::size_t>(P) * static_cast<std::size_t>(N), 0.0f);
 
-        // Blackman window is defined on discrete n=0..N-1; we use a continuous n.
         const double M = static_cast<double>(N - 1);
 
+        // generacja po fazach (przesunieciach sinca)
         for (int p = 0; p < P; ++p)
         {
-            const double alpha = static_cast<double>(p) / static_cast<double>(P); // [0,1) faza
-            double sum = 0.0;
+            const double alpha = static_cast<double>(p) / static_cast<double>(P);   //wartosc przesuniecia fazowego [0,1]
+            double sum = 0.0;   //suma do normalizacji zestawu
 
-            for (int tap = 0; tap < N; ++tap)
+            for (int tap = 0; tap < N; ++tap)                       // generacja po indeksach zestawu 
             {
-                const int k = tap - ((N - 1) / 2);             // pozycja wspolczynnika od -k do k
-                const double u = static_cast<double>(k) - alpha; // przesuniecie sinca o frakcje alpha
+                const int k = tap - ((N - 1) / 2);                  // pozycja wspolczynnika od -K do K
+                const double u = static_cast<double>(k) - alpha;    // przesuniecie sinca o frakcje alpha
 
-                // "Fractionally shifted" window index:
-                // tap is 0..N-1, shift by alpha so window aligns with the fractional delay.
-                double n_cont = static_cast<double>(tap) - alpha;
-                n_cont = std::clamp(n_cont, 0.0, M);
+                //double n_cont = static_cast<double>(tap) - alpha;
+                //n_cont = std::clamp(n_cont, 0.0, M);
 
-                //const double w = blackman_window(n_cont, M);
-                const double w = blackman_window((double)tap, M);
-                // Lowpass windowed-sinc kernel:
-                // h(u) = 2*fc * sinc(2*fc*u) * w(...)
-                const double h = (2.0 * fc) * sinc_pi(2.0 * fc * u) * w;
+                const double w = blackman_window((double)tap, M);  
+
+                const double h = (2.0 * fc) * sinc_pi(2.0 * fc * u) * w; 
 
                 const std::size_t idx = static_cast<std::size_t>(p) * static_cast<std::size_t>(N)
                     + static_cast<std::size_t>(tap);
@@ -98,7 +85,8 @@ namespace ttvst::lutSinc
                 sum += h;
             }
 
-            // DC normalization per phase (prevents amplitude flutter vs alpha)
+
+            //normalizacja po indeksach jezeli suma nie jest ekstremalnie mala - zabezpieczenie
             if (std::abs(sum) > 1e-18)
             {
                 const double invSum = 1.0 / sum;
@@ -114,16 +102,7 @@ namespace ttvst::lutSinc
         return lut;
     }
 
-    //--------------------------------------------------------------------------
-    // Interpolation: LUT-sinc (looping source)
-
-    // Evaluates the signal at `playhead` using a windowed-sinc LUT.
-    //
-    // Requirements:
-    // - playhead should be wrapped to [0, srcN) before calling (as in your current code).
-    // - srcN must match src.getNumSamples().
-    //
-    // Returns: one interpolated sample (float) for channel ch.
+    // interpolacja sinc z tablica bez interpolacji miedzyfazowej, starsza wersja
     float interpolateSincLUT(
         const juce::AudioBuffer<float>& src,
         int ch,
@@ -134,10 +113,9 @@ namespace ttvst::lutSinc
         int N
     ) noexcept
     {
-        // Assumes playhead >= 0 due to external wrapping.
         const int K = (N - 1) / 2;
 
-        const int i0 = static_cast<int>(playhead); // floor for non-negative
+        const int i0 = static_cast<int>(playhead);
         const float alpha = static_cast<float>(playhead - static_cast<double>(i0));
 
         int phase = static_cast<int>(alpha * static_cast<float>(P) + 0.5f);
@@ -153,7 +131,6 @@ namespace ttvst::lutSinc
             const int offset = tap - K;
             int idx = i0 + offset;
 
-            // Wrap indices for looping/circular playback
             idx %= srcN;
             if (idx < 0) idx += srcN;
 
@@ -163,6 +140,9 @@ namespace ttvst::lutSinc
         return y;
     }
 
+
+    // docelowa interpolacja sinc z interpolacja pomiedzy fazami
+    // interpoluje jedna wartosc  dla niecalkowitej poczycji odczytu playhead
     float interpolateSincLUT_PhaseLerp(
         const juce::AudioBuffer<float>& src,
         int ch,
@@ -175,23 +155,19 @@ namespace ttvst::lutSinc
     {
         const int K = (N - 1) / 2;
 
-        // floor for non-negative playhead
         const int i0 = static_cast<int>(playhead);
 
-        // keep fractional part in double
-        const double alpha = playhead - static_cast<double>(i0); // [0, 1)
+        const double alpha = playhead - static_cast<double>(i0);
 
-        // continuous phase position
         const double p = alpha * static_cast<double>(P);
-        int p0 = static_cast<int>(std::floor(p));                // 0..P-1 (except alpha==1)
-        double mu = p - static_cast<double>(p0);                 // 0..1
+        int p0 = static_cast<int>(std::floor(p));
+        double mu = p - static_cast<double>(p0);
 
-        // clamp (safety)
         if (p0 < 0) { p0 = 0; mu = 0.0; }
         if (p0 >= P) { p0 = P - 1; mu = 0.0; }
 
         int p1 = p0 + 1;
-        if (p1 >= P) { p1 = P - 1; } // edge: last phase lerps with itself
+        if (p1 >= P) { p1 = P - 1; }
 
         const float* coeff0 = lut + static_cast<std::size_t>(p0) * static_cast<std::size_t>(N);
         const float* coeff1 = lut + static_cast<std::size_t>(p1) * static_cast<std::size_t>(N);
@@ -206,7 +182,6 @@ namespace ttvst::lutSinc
             const int offset = tap - K;
             int idx = i0 + offset;
 
-            // Wrap indices for looping/circular playback
             idx %= srcN;
             if (idx < 0) idx += srcN;
 
@@ -220,10 +195,7 @@ namespace ttvst::lutSinc
     }
 
 
-    //--------------------------------------------------------------------------
-    // Interpolation: Catmull-Rom / cubic Hermite (looping source)
-
-    // Your existing 4-point cubic Hermite (Catmull-Rom) as a function.
+    // implementacja Catmull-Rom
     float interpolateHermiteCatmullRom(
         const juce::AudioBuffer<float>& src,
         int ch,
@@ -275,4 +247,4 @@ namespace ttvst::lutSinc
         return static_cast<float>(y1 + (y2 - y1) * frac);
     }
 
-} // namespace lut_sinc
+}
